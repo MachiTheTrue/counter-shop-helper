@@ -1,142 +1,135 @@
-# Counter & Shop Helper — fiche de publication
+# Releasing Counter & Shop Helper
 
-Ces champs ne vont **pas** dans `manifest.toml` : Tempest les prend au moment de `mod publish` (options `--summary`, `--tags`, `--patch`, `--changelog`). Le manifeste ne porte que `id`, `name`, `version`, `icon`, `readme`, `dependencies` et `[[mod.authors]]` (`name`, `link`), comme les mods publiés installés sur l'instance. La description longue est `src/README.md`, intégrée au paquet et affichée par le Launcher.
+How to ship a new version to **GitHub Releases** and the **Tempest mod repository**, keeping the same mod ID and signing key every time.
 
-| Champ | Valeur |
+**Contents:** [Listing details](#listing-details) · [How Tempest publishing works](#how-tempest-publishing-works) · [One-time setup](#one-time-setup) · [First GitHub push](#first-github-push) · [Every new version](#every-new-version) · [Safety rules](#safety-rules)
+
+## Listing details
+| Field | Value |
 |---|---|
-| id | `paladins-smartcounter-81` (inchangé, pour que les mises à jour remplacent l'installation) |
-| Nom | Counter & Shop Helper |
-| Version | 0.6.2 |
-| Auteur | Machi Konno (lien : `Discord: machi.konno`) |
-| Type (`kind`) | scripts (Lua, dépend de `tempest-scripting>=1.0.0`) |
-| Compatibilité | patch `8.1` (build 8.1.5839.0, « Wekono's Wake Hotfix 1 », d'après `tempest-cli build identify`) |
-| Icône | `src/icon.png`, 512 × 512 (même format que les mods WOLPER et Tempest Scripting) |
-| Paquet | `dist\Paladins-SmartCounter-8.1-0.6.2.tempest` |
+| Mod ID | `paladins-smartcounter-81`: **never change it**, so updates replace the installed version |
+| Name | Counter & Shop Helper |
+| Current version | 0.6.2 |
+| Author | Machi Konno (link: `Discord: machi.konno`) |
+| Kind | scripts (Lua), depends on `tempest-scripting>=1.0.0` |
+| Compatibility | patch `8.1` (build 8.1.5839.0, "Wekono's Wake Hotfix 1", from `tempest-cli build identify`) |
+| Icon | `src/icon.png`, 512 × 512 |
+| Package | `dist\Paladins-SmartCounter-8.1-<version>.tempest` |
 
-**Résumé (une ligne, `--summary`) :**
-> Shop and counter helper: 4 items to buy in order + 1 optional, live rank progress, enemy threats and counter-picks. 8 languages.
+- **Summary** (`--summary`, one line, required for the first publish): Shop and counter helper: 4 items to buy in order + 1 optional, live rank progress, enemy threats and counter-picks. 8 languages.
+- **Tags** (`--tags`, lowercase like the rest of the repository): `ui,overlay,hud,items,shop,counter,quality-of-life`
+- **Long description:** `src/README.md`, packed into the `.tempest` file and shown by the Launcher.
 
-**Tags (`--tags`), au format du dépôt (minuscules, comme `ui,hud`, `quality-of-life`) :**
-`ui,overlay,hud,items,shop,counter,quality-of-life`
+> Summary, tags, compatibility and changelog are **not** manifest fields. Tempest takes them as `mod publish` options. The manifest only has `id`, `name`, `version`, `icon`, `readme`, `dependencies` and `[[mod.authors]]` (`name`, `link`).
 
-**Changelog (`--changelog`) :**
-> First public release. 4 core items + 1 optional, live item/rank reading, enemy ability threats, counter-picks in champion select, 8 languages with the game's own names. Read-only: no automatic buying.
+## How Tempest publishing works
+Checked locally with `tempest-cli` 1.0.0, the Launcher's data and the public listings.
+- **Creator account:** made on `mods.lowrezstudio.com`, not with the CLI. Create an API key (`tm_live_…`) under *Settings*, then `mod login` stores it on this PC.
+- **Publishing:** `mod publish` uploads a **signed** package. Each version gets a review status: every listed version is `approved`, so there is moderation.
+- **Signing:** packages are signed with a key made by `mod gen-key`. Its `--id` is the signer name players see. The current local key is called `testmod81-dev`; make a key in your own name before the first public release (step 2 below).
+- **Proving key ownership:** the website shows a challenge text; `mod sign-text` signs it.
+- **Trust levels:**
+  - `first-party`: only keys on LowRez's official list (`cdn.lowrezstudio.com/keys/trusted.keys`), described as "keys whose signature makes a mod's DLLs and Lua scripts trusted". LowRez maintains that list; there's no command to add yourself, so you have to ask them.
+  - `unknown`: most community mods. They're still published and approved.
+  - Your current key is trusted **only on this PC**.
+- **Revocation:** a key put on `untrusted.keys` gets its mods refused at install and disabled at launch. Never share a `.key` file.
+- **Not checked from here:** the website's exact screens, what players see for an `unknown`-trust Lua mod, and review times. Official docs: `docs.lowrezstudio.com`.
 
-## Comment fonctionnent publication, comptes et confiance (relevé local, tempest-cli 1.0.0)
-- **Compte créateur** : il se crée sur le site `mods.lowrezstudio.com`. La CLI n'en crée pas. Une clé d'API `tm_live_...` se crée sur le site, sous *Settings*, et `mod login` l'enregistre sur ce PC.
-- **Publication** : `mod publish` envoie un paquet **signé** au dépôt. Chaque version a un statut (`approved` pour toutes celles listées, donc il y a une modération). `--summary` est obligatoire pour un nouveau mod.
-- **Signature** : chaque paquet est signé avec une clé PGP/RSA (`mod gen-key`). Le nom affiché du signataire est l'`--id` de la clé : la clé actuelle s'appelle `testmod81-dev`.
-- **Vérification de la clé** : le site envoie un texte défi. `mod sign-text` le signe pour prouver que la clé est à toi.
-- **Confiance (`trust`)** :
-  - `first-party` seulement pour les clés de la liste officielle `https://cdn.lowrezstudio.com/keys/trusted.keys`, tenue par LowRez (`just keys-publish`) et intégrée à la CLI. Elle porte la mention « keys whose signature makes a mod's DLLs and Lua scripts trusted ». Aucune commande ne permet à un créateur d'y ajouter sa clé : il faut le demander à LowRez.
-  - Les autres mods de la communauté sont publiés et `approved` avec `trust=unknown` (omega, LAMPOPO, Peluche, Mabci…).
-  - Ta clé `testmod81-dev` n'est de confiance que **sur ce PC** (dossier `keys` du Launcher et `<jeu>\.tempest\keys`).
-- **Révocation** : une clé ajoutée à `untrusted.keys` fait refuser ses mods à l'installation et les désactive au lancement. D'où : ne jamais diffuser le fichier `.key`.
-- **Non vérifiable ici** :
-  - l'écran exact du site ;
-  - ce que voient les joueurs pour un mod Lua `trust=unknown` ;
-  - le délai de modération.
-
-  Documentation officielle (non lue ici) : `docs.lowrezstudio.com`.
-
-## Publier, pas à pas (non fait : à lancer toi-même)
+## One-time setup
+Run once per PC. Adjust the paths in the first block if your folders differ.
 ```powershell
+# Paths used by every command below
 $T="C:\FiF Project\Tools\TempestStudio\1.0.0-alpha.10"; $C="$T\tempest-cli.exe"
 $G="D:\SteamLibrary\steamapps\common\Paladins"
 $M="C:\FiF Project\Mods\Paladins-8.1\Mods\Paladins-SmartCounter-8.1"
-$P="$M\dist\Paladins-SmartCounter-8.1-0.6.2.tempest"
-$K="$env:USERPROFILE\.tempest-keys\machi-konno"   # nouvelle clé publique (étape 2)
+$K="$env:USERPROFILE\.tempest-keys\machi-konno"      # signing key, kept OUTSIDE the repository
 
-# 1. Compte + clé d'API : sur mods.lowrezstudio.com (Settings -> créer une clé tm_live_...), puis :
-& $C mod login tm_live_XXXXXXXX          # la clé reste sur ce PC ; ne la colle nulle part ailleurs
+# 1. Git + GitHub CLI (reopen PowerShell afterwards)
+winget install --id Git.Git -e
+winget install --id GitHub.cli -e
+gh auth login
+git config --global user.name "Machi Konno"
+git config --global user.email "ID+USERNAME@users.noreply.github.com"   # GitHub "noreply" address (Settings > Emails)
 
-# 2. Clé de signature publique au nom de l'auteur (une seule fois ; garder une copie de sauvegarde du .key) :
+# 2. Signing key in the author's name (back up the .key file somewhere safe and private)
 & $C mod gen-key $K --id "Machi Konno" --game-path $G
 & $C mod fingerprint "$K.pub"
 
-# 3. Vérifier la clé sur le site : coller le texte défi affiché par le site, renvoyer la signature imprimée :
-& $C mod sign-text "TEXTE_DU_DEFI" --key "$K.key"
-
-# 4. Re-signer le paquet avec cette clé, puis contrôler :
-& $C mod sign $P --key "$K.key"
-& $C mod verify $P --game-path $G
-& $C mod install $G $P --replace --defer   # « can be installed; nothing was written » = OK
-
-# 5. Publier :
-& $C mod publish $P --patch 8.1 --summary "Shop and counter helper: 4 items to buy in order + 1 optional, live rank progress, enemy threats and counter-picks. 8 languages." --tags "ui,overlay,hud,items,shop,counter,quality-of-life" --changelog "First public release. 4 core items + 1 optional, live item/rank reading, enemy ability threats, counter-picks in champion select, 8 languages with the game's own names. Read-only: no automatic buying."
-
-# 6. Suivre le statut (pending / approved) et le niveau de confiance du signataire :
-& $C mod search "paladins-smartcounter-81" --json
+# 3. Tempest account: create an API key on mods.lowrezstudio.com (Settings), then store it on this PC only
+& $C mod login tm_live_XXXXXXXX
+#    Prove key ownership: paste the website's challenge text, then paste the printed signature back on the site
+& $C mod sign-text "CHALLENGE_TEXT" --key "$K.key"
 ```
 
-**Mises à jour suivantes :**
-- monter `version` dans `src/manifest.toml` et `VERSION` dans `main.lua` ;
-- `mod pack "$M\src" <nouveau paquet> --key "$K.key"`, puis `mod verify` ;
-- `mod publish <paquet> --patch 8.1 --changelog "..."` : le résumé n'est plus obligatoire.
-
-Toujours le même `id`, toujours la même clé.
-
-**Statut first-party :** demander à LowRez d'ajouter l'empreinte de `machi-konno.pub` à `trusted.keys`. `mod sign-key-lists` est réservé aux signataires de LowRez : ne pas l'utiliser.
-
-## GitHub : premier envoi et routine de mise à jour
-Ce dossier est la racine du dépôt.
-- `.gitignore` exclut les clés (`*.key`), les jetons et secrets, `dist/` et `*.tempest`, les caches Python, `Work/` et les fichiers temporaires.
-- Les paquets signés ne vont **pas** dans git : ils sont joints aux GitHub Releases.
-- Les clés restent dans `%USERPROFILE%\.tempest-keys\`, hors du dépôt.
-
-### 0. Outils (une seule fois)
+## First GitHub push
 ```powershell
-winget install --id Git.Git -e
-winget install --id GitHub.cli -e
-# rouvrir PowerShell, puis :
-gh auth login                      # connexion GitHub dans le navigateur
-git config --global user.name "Machi Konno"
-git config --global user.email "ID+PSEUDO@users.noreply.github.com"   # adresse « noreply » de GitHub (Settings > Emails)
-```
-
-### 1. Premier envoi
-```powershell
-Set-Location "C:\FiF Project\Mods\Paladins-8.1\Mods\Paladins-SmartCounter-8.1"
+Set-Location $M
 git init -b main
 git add .
-git status                         # contrôle : aucun .key, aucun .tempest, aucun __pycache__
-git ls-files | Select-String '\.key$|\.tempest$|token|secret'   # doit ne rien afficher
+git status                                                     # check: no .key, no .tempest, no __pycache__
+git ls-files | Select-String '\.key$|\.tempest$|token|secret'  # must print nothing
 git commit -m "Counter & Shop Helper 0.6.2"
 gh repo create counter-shop-helper --public --source . --remote origin --push
-git tag -a v0.6.2 -m "Counter & Shop Helper 0.6.2"
-git push origin v0.6.2
-$v="0.6.2"; $c=Get-Content -Raw -Encoding utf8 CHANGELOG.md
-[regex]::Match($c,"(?ms)^## $([regex]::Escape($v)) .*?(?=^## |\z)").Value.Trim() | Set-Content -Encoding utf8 "$env:TEMP\notes-$v.md"
-gh release create "v$v" "dist\Paladins-SmartCounter-8.1-$v.tempest" --title "Counter & Shop Helper $v" --notes-file "$env:TEMP\notes-$v.md"
 ```
-
-Sans `gh` : créer un dépôt **vide** sur github.com (sans README ni .gitignore), puis :
+Without `gh`: create an **empty** repository on github.com (no README, no .gitignore), then:
 ```powershell
-git remote add origin https://github.com/PSEUDO/counter-shop-helper.git
+git remote add origin https://github.com/USERNAME/counter-shop-helper.git
 git push -u origin main
 ```
-Joindre ensuite le `.tempest` à la Release depuis la page *Releases* du site.
+Then publish 0.6.2 by following [Every new version](#every-new-version) from step 3, with `$v="0.6.2"`. The package in `dist\` is still signed with the old local key, so step 3 re-signs it with yours.
 
-### 2. À chaque nouvelle version (exemple : 0.6.3)
-1. Dans le code :
-   - monter `version` dans `src/manifest.toml` et `VERSION` dans `src/scripts/main.lua` ;
-   - ajouter une section `## 0.6.3 — JJ/MM/AAAA` en haut de `CHANGELOG.md`.
-2. Tests : dans `engine\`, lancer `build_champions_data.py`, `test_predictor.py`, `export_lua.py` et `check_lua.py`.
-3. Paquet : `mod pack` avec **la même clé**, puis `mod verify`. Voir « Publier, pas à pas » plus haut.
-4. Git et GitHub Release : voir ci-dessous.
+## Every new version
+Example: `0.6.3`. Set the paths from [One-time setup](#one-time-setup) first.
+
+**1. Bump the version.**
+- In `src/manifest.toml`, set `version`. In `src/scripts/main.lua`, set `VERSION`.
+- Add a section at the **top** of `CHANGELOG.md`: `## 0.6.3 — YYYY-MM-DD`, followed by bullet points. That text becomes the GitHub Release notes.
+
+**2. Run the tests** (in `engine\`):
 ```powershell
-Set-Location "C:\FiF Project\Mods\Paladins-8.1\Mods\Paladins-SmartCounter-8.1"
-$v="0.6.3"
-git status
+Set-Location "$M\engine"
+python -I -B -X utf8 build_champions_data.py
+python -I -B -X utf8 test_predictor.py
+python -I -B -X utf8 export_lua.py
+python -I -B -X utf8 check_lua.py          # must end with "OK"
+```
+
+**3. Build, sign and check the package** (same key, same mod ID):
+```powershell
+$v="0.6.3"; $P="$M\dist\Paladins-SmartCounter-8.1-$v.tempest"
+& $C mod pack "$M\src" $P --key "$K.key"     # for an existing package: & $C mod sign $P --key "$K.key"
+& $C mod verify $P --game-path $G
+& $C mod install $G $P --replace --defer     # "can be installed; nothing was written" = OK
+```
+
+**4. Commit, tag and push:**
+```powershell
+Set-Location $M
 git add -A
-git commit -m "v$($v): résumé en une ligne"
+git status                                   # check again: no .key / .tempest listed
+git commit -m "v$($v): one-line summary"
 git push
 git tag -a "v$v" -m "Counter & Shop Helper $v"
 git push origin "v$v"
-$c=Get-Content -Raw -Encoding utf8 CHANGELOG.md
-[regex]::Match($c,"(?ms)^## $([regex]::Escape($v)) .*?(?=^## |\z)").Value.Trim() | Set-Content -Encoding utf8 "$env:TEMP\notes-$v.md"
-gh release create "v$v" "dist\Paladins-SmartCounter-8.1-$v.tempest" --title "Counter & Shop Helper $v" --notes-file "$env:TEMP\notes-$v.md"
 ```
-5. Tempest : `mod publish` du **même fichier** `.tempest` avec `--patch 8.1 --changelog "..."`. Le mod garde le même `id` (`paladins-smartcounter-81`) et la même clé.
 
-> Si tu changes de clé de signature (étape 2 de « Publier, pas à pas »), re-signe le paquet **avant** de créer le tag et la Release : le fichier joint sur GitHub doit être exactement celui publié sur Tempest.
+**5. GitHub Release**, with the signed package attached and the notes taken from `CHANGELOG.md`:
+```powershell
+$notes = powershell -ExecutionPolicy Bypass -File "$M\release-notes.ps1" $v
+gh release create "v$v" $P --title "Counter & Shop Helper $v" --notes-file $notes
+```
+`release-notes.ps1` copies the `## <version>` section of `CHANGELOG.md` (without its heading line) into `%TEMP%\notes-<version>.md`. It stops with an error if that section is missing or empty.
+
+**6. Tempest repository**, with the **same** `.tempest` file:
+```powershell
+& $C mod publish $P --patch 8.1 --changelog "One-line summary of this version"
+#  first publish only: add --summary "..." --tags "ui,overlay,hud,items,shop,counter,quality-of-life"
+& $C mod search "paladins-smartcounter-81" --json   # review status and signer trust
+```
+
+## Safety rules
+- **Keys stay out of the repository.** Signing keys live in `%USERPROFILE%\.tempest-keys\`. `.gitignore` also blocks `*.key`, tokens, secrets and `.env`.
+- **Packages go to Releases, never to git.** `dist/` and `*.tempest` are ignored.
+- **API tokens are never typed into a file.** `mod login` stores the `tm_live_…` key in Tempest's own settings.
+- **Same key, same ID, every version.** Switching keys or IDs makes updates look like a different mod. If you ever change the key, re-sign **before** tagging, so the GitHub file is exactly the one published on Tempest.
+- **Official trust:** to get `first-party` trust, ask LowRez to add your `.pub` fingerprint to `trusted.keys`. `mod sign-key-lists` is only for LowRez's own list signers; don't use it.

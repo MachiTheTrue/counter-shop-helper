@@ -1,81 +1,76 @@
 <p align="center">
-  <img src="src/icon.png" width="112" alt="Counter & Shop Helper">
+  <img src="src/icon.png" width="112" alt="Counter & Shop Helper logo">
 </p>
 
 <h1 align="center">Counter & Shop Helper</h1>
 
 <p align="center">
-  Mod Lua pour <b>Paladins 8.1</b> (Wekono's Wake, build 8.1.5839.0) · par <b>Machi Konno</b> · Discord : <code>machi.konno</code><br>
-  Nécessite <b>Tempest Scripting</b> 1.0.0 ou plus · <a href="CHANGELOG.md">Journal des versions</a> · <a href="../../releases">Téléchargements</a>
+  A Lua mod for <b>Paladins 8.1</b> (Wekono's Wake, build 8.1.5839.0) · by <b>Machi Konno</b> · Discord: <code>machi.konno</code><br>
+  Requires <b>Tempest Scripting</b> 1.0.0 or later · <a href="../../releases">Download</a> · <a href="CHANGELOG.md">Changelog</a>
 </p>
+
+> 🇫🇷 **En français :** le mod est entièrement traduit en jeu (8 langues, dont le français). Les notes techniques sont en français dans [DEVELOPPEMENT.md](DEVELOPPEMENT.md).
 
 ---
 
-**Sommaire** : [En bref](#en-bref) · [Fonctions](#fonctions) · [Touches](#touches-et-utilisation) · [Installation](#installation) · [Mises à jour](#mises-à-jour) · [English](#english) · [Crédits](#crédits)
+**Contents:** [Overview](#overview) · [Features](#features) · [Hotkeys & usage](#hotkeys--usage) · [Installation](#installation) · [Updates & changelog](#updates--changelog) · [Credits](#credits)
 
-## En bref
-Le mod lit l'équipe adverse et te dit **quoi acheter, dans quel ordre, et qui surveiller**. Il affiche un petit panneau en jeu, dans ta langue, avec les noms officiels du jeu.
+## Overview
+Counter & Shop Helper reads the enemy team and tells you **what to buy, in which order, and who to watch out for**. It shows a small in-game panel in your language, using the game's own names.
 
-> 🔒 **Lecture seule.** Le mod n'achète rien, n'envoie rien au serveur et ne modifie aucun fichier du jeu. L'achat automatique est volontairement désactivé, car Tempest n'offre aucune fonction de boutique sûre.
+> 🔒 **Read-only.** The mod never buys anything, never sends anything to the server, and changes no game file. Automatic buying is disabled on purpose: Tempest offers no safe shop function.
 
-## Fonctions
+## Features
 | | |
 |---|---|
-| 🛒 **4 objets + 1 en option** | 4 objets principaux dans l'ordre d'achat, avec le rang conseillé et une courte raison. Un **5e objet en option** (bordure bleue pointillée) dépend du déroulement de la partie. |
-| 📈 **Lecture en direct** | Tes objets et leurs rangs sont lus dans le jeu. Gris = pas acheté, ambre = rang en cours, vert = rang conseillé atteint. Si tu achètes autre chose, le plan s'adapte autour. |
-| ⚠️ **Menaces adverses** | Les compétences des ennemis, par exemple « Makoa : Ancre de drague (étourdit) ». |
-| 🎯 **Sélection des champions** | Contres conseillés et meilleurs rôles face à l'équipe adverse. |
-| 🌍 **8 langues natives** | English, Français, Deutsch, Italiano, Русский, 简体中文, 日本語, 한국어, ou Auto (langue de Steam / du jeu). Les noms d'objets, de rôles et de compétences sont ceux du jeu 8.1. |
-| ✋ **Réglage manuel** | Si la lecture directe n'est pas disponible, tu règles tes objets dans l'onglet Partie (ils repartent de 0 à chaque session). |
+| 🛒 **4 core items + 1 optional** | 4 core items in buying order, each with its advised rank and a short reason. A **5th optional item** (blue dashed border) is a flex pick that depends on how the match goes. |
+| 📈 **Live item & rank reading** | Your items and ranks are read from the game. Grey = not bought, amber = rank in progress, green = advised rank reached. Buy something off-plan and the free slots are re-planned around it. |
+| ⚠️ **Enemy threats** | Based on the enemies' own abilities, e.g. "Makoa: Dredge Anchor (stuns)". |
+| 🎯 **Champion select** | Counter-picks and the best roles against the enemy team (hidden once you're locked in). |
+| 🌍 **8 languages** | English, Français, Deutsch, Italiano, Русский, 简体中文, 日本語, 한국어, or Auto (follows your Steam / game language). Item, role and ability names come from the game's 8.1 text files. |
+| ✋ **Manual fallback** | If live reading isn't available, set your items by hand in the Match tab. They reset to 0 every session. |
 
-## Touches et utilisation
-| Touche | Action |
+## Hotkeys & usage
+| Key | Action |
 |---|---|
-| `Ctrl+J` | Menu : Partie, Paramètres, Aide |
-| `Ctrl+H` | Afficher / masquer le panneau |
-| `Ctrl+K` | Basculer compact / détaillé |
-| `Ctrl+O` | Paramètres |
-| `Ctrl+L` | Verrouiller le panneau |
+| `Ctrl+J` | Open the menu (Match, Settings, Help) |
+| `Ctrl+H` | Show / hide the panel |
+| `Ctrl+K` | Switch between compact and detailed view |
+| `Ctrl+O` | Open settings |
+| `Ctrl+L` | Lock / unlock the panel |
 
-- Les touches se changent dans le menu. Toutes existent sur un clavier 60 %.
-- Menu ouvert, glisse le panneau pour le déplacer ou tire son bord pour l'élargir. « Largeur automatique » remet la largeur calculée.
-- Commandes de la console Tempest : `smartcounter` (menu), `smartcounter_probe` (rapport de détection), `smartcounter_items` et `smartcounter_items_watch` (lecture des objets), `smartcounter_selftest`. Les rapports vont dans `%TEMP%\tempest-scripting.log`.
+- **Compact view:** a slim strip with your buy order and the main threat, made for mid-fight glances.
+- **Detailed view:** adds ranks, reasons, threats and, in champion select, counter-picks.
+- **Auto layout:** shows the detailed view when something changes, then goes back to compact.
+- **Moving the panel:** with the menu open, drag the panel to move it or drag its edge to resize it. *Settings → Automatic width* restores the computed width.
+- **Changing keys:** every key can be rebound in the menu. All defaults work on a 60% keyboard.
+- **Console commands** (Tempest console): `smartcounter` (menu), `smartcounter_probe` (detection report), `smartcounter_items` / `smartcounter_items_watch` (live item reading), `smartcounter_selftest`. Reports go to `%TEMP%\tempest-scripting.log`.
 
 ## Installation
-**Prérequis :** Paladins 8.1 avec Tempest et le mod **Tempest Scripting** installés.
+**You need:** Paladins 8.1 with Tempest and the **Tempest Scripting** mod installed.
 
-**Avec le Tempest Launcher** (une fois le mod publié sur le dépôt Tempest) : cherche « Counter & Shop Helper » dans les mods du Launcher et installe-le.
+**Option A: Tempest Launcher** (once the mod is listed on the Tempest mod repository)
+Search for "Counter & Shop Helper" in the Launcher's mods and install it.
 
-**Depuis une GitHub Release :**
-1. Télécharge `Paladins-SmartCounter-8.1-<version>.tempest` dans les [Releases](../../releases).
-2. Installe ce fichier `.tempest` avec le Tempest Launcher, ou en ligne de commande :
+**Option B: GitHub Release package**
+1. Download `Paladins-SmartCounter-8.1-<version>.tempest` from [Releases](../../releases).
+2. Install it with the Tempest Launcher, or from the command line:
    ```powershell
-   tempest-cli.exe mod install "<dossier de Paladins>" "Paladins-SmartCounter-8.1-<version>.tempest" --replace
+   tempest-cli.exe mod install "<your Paladins folder>" "Paladins-SmartCounter-8.1-<version>.tempest" --replace
    ```
-3. Lance le jeu : l'astuce « Counter & Shop Helper prêt » s'affiche, et `Ctrl+J` ouvre le menu.
+3. Start the game. A short "Counter & Shop Helper ready" tip appears, and `Ctrl+J` opens the menu.
 
-> Le paquet est signé par l'auteur. Le Launcher peut indiquer un signataire « non officiel » : c'est le cas de la plupart des mods de la communauté.
-> `--replace` met à jour une installation existante. L'identifiant du mod (`paladins-smartcounter-81`) ne change jamais.
+> The package is signed by the author. The Launcher may show the signer as unofficial, which is normal for community mods.
+> `--replace` updates an existing install. The mod ID (`paladins-smartcounter-81`) never changes, so updates always replace the previous version.
 
-## Mises à jour
-- **Ce qui a changé :** [CHANGELOG.md](CHANGELOG.md), une section par version, la plus récente en haut.
-- **Télécharger une version :** [Releases](../../releases). Chaque tag `vX.Y.Z` porte le paquet `.tempest` signé et les notes de cette version.
-- **Version actuelle :** 0.6.2.
+## Updates & changelog
+- **What changed:** [CHANGELOG.md](CHANGELOG.md), one section per version, newest first.
+- **Downloads:** [GitHub Releases](../../releases). Each `vX.Y.Z` tag has the signed `.tempest` package and that version's notes.
+- **Current version:** 0.6.2.
 
-## English
-**Counter & Shop Helper** is a Lua mod for Paladins 8.1 (Wekono's Wake), made by Machi Konno (Discord: `machi.konno`). It requires Tempest Scripting.
-- **Shop plan:** 4 core items in buying order, plus 1 optional item (blue dashed border) that depends on the match.
-- **Live reading:** your items and ranks are read from the game.
-- **Threats and counter-picks:** enemy threats based on their own abilities, and counter-picks in champion select.
-- **8 languages:** the game's own 8.1 names in every language.
-- **Read-only:** no automatic buying, nothing sent to the server.
-
-Keys: `Ctrl+J` menu · `Ctrl+H` panel · `Ctrl+K` compact/detailed · `Ctrl+O` settings · `Ctrl+L` lock.
-Install the `.tempest` file from [Releases](../../releases) with the Tempest Launcher, or with `tempest-cli mod install "<Paladins folder>" <file> --replace`. Changes are listed in [CHANGELOG.md](CHANGELOG.md) (French).
-
-## Crédits
-- **Machi Konno** · Discord : `machi.konno`.
-- Les noms d'objets, de compétences et de champions, et les icônes de la boutique, appartiennent à Paladins / Hi-Rez Studios.
-- Le logo est une création originale.
-- Mod non officiel, sans lien avec Hi-Rez Studios.
-- Pour les développeurs : [DEVELOPPEMENT.md](DEVELOPPEMENT.md) (structure, moteur, tests) et [RELEASE.md](RELEASE.md) (publication Tempest et GitHub).
+## Credits
+- **Made by Machi Konno** · Discord: `machi.konno`.
+- **Paladins** and its item, ability and champion names, shop icons and game data belong to **Hi-Rez Studios**. This is an unofficial fan mod, not affiliated with or endorsed by Hi-Rez Studios.
+- Built on **Tempest** and **Tempest Scripting** by LowRez Studio.
+- The mod logo is original artwork.
+- For developers: [RELEASE.md](RELEASE.md) (publishing to Tempest and GitHub) · [DEVELOPPEMENT.md](DEVELOPPEMENT.md) (structure, engine, tests; in French).
