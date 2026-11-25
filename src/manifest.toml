@@ -1,0 +1,13 @@
+[mod]
+id = "paladins-smartcounter-81"
+name = "Counter & Shop Helper"
+version = "0.6.2"
+icon = "icon.png"
+readme = "README.md"
+dependencies = [
+    "tempest-scripting>=1.0.0",
+]
+
+[[mod.authors]]
+name = "Machi Konno"
+link = "Discord: machi.konno"

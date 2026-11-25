@@ -1,0 +1,7 @@
+# Text files: normalised in the repository, native line endings on checkout.
+* text=auto
+
+# Binary files: never touched.
+*.png binary
+*.tempest binary
+*.zip binary

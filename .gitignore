@@ -1,0 +1,50 @@
+# Counter & Shop Helper: what never goes to GitHub.
+
+# --- Signing keys, API tokens, secrets (never commit, never share) ------------------------------
+# The Tempest signing key lives in %USERPROFILE%\.tempest-keys\, outside this repository.
+*.key
+*.pem
+*.p12
+*.pfx
+*.kdbx
+.tempest-keys/
+*.token
+*token*.txt
+*secret*
+.env
+.env.*
+credentials*.json
+
+# --- Build output: signed .tempest packages go to GitHub Releases, not into git ------------------
+dist/
+*.tempest
+*.zip
+*.7z
+
+# --- Python caches and environments ---------------------------------------------------------------
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.venv/
+venv/
+
+# --- Game files and local workspaces (extracted game data, SDK dumps, logs) -----------------------
+Work/
+Extracted/
+types/sdk/
+*.upk
+*.log
+
+# --- Temporary and editor / OS files --------------------------------------------------------------
+*.tmp
+*.temp
+*.bak
+*.orig
+*.swp
+~$*
+.idea/
+.vs/
+Thumbs.db
+desktop.ini
+.DS_Store
