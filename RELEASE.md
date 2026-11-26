@@ -2,7 +2,7 @@
 
 How to ship a new version to **GitHub Releases** and the **Tempest mod repository**, keeping the same mod ID and signing key every time.
 
-**Contents:** [Listing details](#listing-details) · [How Tempest publishing works](#how-tempest-publishing-works) · [One-time setup](#one-time-setup) · [First GitHub push](#first-github-push) · [Every new version](#every-new-version) · [Safety rules](#safety-rules)
+**Contents:** [Listing details](#listing-details) · [Versioning](#versioning) · [How Tempest publishing works](#how-tempest-publishing-works) · [One-time setup](#one-time-setup) · [First GitHub push](#first-github-push) · [Every new version](#every-new-version) · [Safety rules](#safety-rules)
 
 ## Listing details
 | Field | Value |
@@ -22,6 +22,43 @@ How to ship a new version to **GitHub Releases** and the **Tempest mod repositor
 - **Long description:** `src/README.md`, packed into the `.tempest` file and shown by the Launcher.
 
 > Summary, tags, compatibility and changelog are **not** manifest fields. Tempest takes them as `mod publish` options. The manifest only has `id`, `name`, `version`, `icon`, `readme`, `dependencies` and `[[mod.authors]]` (`name`, `link`).
+
+## Versioning
+Semantic Versioning, `MAJOR.MINOR.PATCH`, starting from the `0.7.0` release. Older history stays as it is: 0.6.3 was never tagged, and `v0.6.4` is a lightweight tag.
+
+| Change | Bump | After `0.7.0` |
+|---|---|---|
+| **PATCH**: bug fix, detection or selector fix, small text or UI adjustment, no new feature | PATCH + 1 | `0.7.1`, then `0.7.2` |
+| **MINOR**: new feature, new tab or setting, notable architecture addition (while before 1.0) | MINOR + 1, PATCH back to 0 | `0.8.0` |
+| **MAJOR**: `1.0.0` is the first stable public release, built once moderators have approved a 0.x version. Later: breaking changes or major overhauls | MAJOR + 1, MINOR and PATCH back to 0 | `1.0.0`, later `2.0.0` |
+
+- **One step from the latest tag.** The next version is exactly one of the three bumps from the latest `vX.Y.Z` tag: no skipped number, no number used twice. When a release mixes kinds of change, the biggest decides (a fix and a feature make a MINOR).
+- **A number is spent once its tag is pushed.** Until then, rebuilding and re-signing the same version for local tests is fine. After that:
+  - any change to what ships (`src/`) goes into the next version;
+  - changes that ship nothing (docs, `engine/` tools and tests) go to `main` without a bump.
+- **A released package is never replaced.** If moderators reject `X.Y.Z`, the corrected build is the next version (usually `X.Y.Z+1`), never a different file under the same number. An approved 0.x package is not renamed to 1.0.0 either: its version is inside the signed file, so 1.0.0 is a new build.
+- **One version string everywhere.** `src/manifest.toml` is the reference; every place below says exactly the same `X.Y.Z`:
+
+| Where | What |
+|---|---|
+| `src/manifest.toml` | `version = "X.Y.Z"`, the version Tempest and the Launcher show |
+| `src/scripts/main.lua` | `local VERSION = "X.Y.Z"`, used in the log and report lines |
+| `CHANGELOG.md` | top section `## X.Y.Z — YYYY-MM-DD`, which becomes the release notes |
+| `README.md`, `RELEASE.md`, `DEVELOPPEMENT.md` | "Current version" / `Version` row, plus the pack command in `DEVELOPPEMENT.md` |
+| `engine/tests/lua_tests.lua` | the `report vX.Y.Z` log line the tests expect |
+| Git | annotated tag `vX.Y.Z` (`git tag -a`) |
+| GitHub | release on tag `vX.Y.Z`, titled `Counter & Shop Helper X.Y.Z` |
+| Package | `dist\Paladins-SmartCounter-8.1-X.Y.Z.tempest`. Here `8.1` is the game patch, not the mod version |
+
+`check-version.ps1` checks all of this. It only reads: it prints what each place says and ends with `OK`, or lists every mismatch and exits with code 1.
+
+### Pre-release checklist
+With `$v` set to the new version, in `$M`:
+1. **Choose the bump.** Pick it from the table, one step after `git describe --tags --abbrev=0`.
+2. **Write the version.** Put `$v` in every file of the table above. The tag, release and package come later.
+3. **Check the files.** `powershell -ExecutionPolicy Bypass -File .\check-version.ps1 $v` must print `OK`. It also refuses a number that is already tagged or that skips one.
+4. **Run the tests.** The tests and `check_lua.py` must pass (step 2 below).
+5. **Check the release.** After the GitHub release and **before** `mod publish`, run `powershell -ExecutionPolicy Bypass -File .\check-version.ps1 $v -Released`. It must print `OK`: the tag is annotated, the manifest at the tag matches, and the GitHub asset is the same file as `dist\`.
 
 ## How Tempest publishing works
 Checked locally with `tempest-cli` 1.0.0, the Launcher's data and the public listings.
@@ -81,11 +118,18 @@ git push -u origin main
 Then publish by following [Every new version](#every-new-version).
 
 ## Every new version
-Example: `0.6.4`. Set the paths from [One-time setup](#one-time-setup) first.
+Example: `0.7.1`, a fix after `v0.7.0`. Set the paths from [One-time setup](#one-time-setup) first, and follow the [pre-release checklist](#pre-release-checklist).
 
-**1. Bump the version.**
-- In `src/manifest.toml`, set `version`. In `src/scripts/main.lua`, set `VERSION`.
-- Add a section at the **top** of `CHANGELOG.md`: `## 0.6.4 — YYYY-MM-DD`, followed by bullet points. That text becomes the GitHub Release notes.
+**1. Bump the version** by one step ([Versioning](#versioning)):
+- Set `version` in `src/manifest.toml` and `VERSION` in `src/scripts/main.lua`.
+- Add a section at the **top** of `CHANGELOG.md`: `## 0.7.1 — YYYY-MM-DD`, followed by bullet points. That text becomes the GitHub Release notes.
+- Update the other places listed in the version table: the "Current version" lines in `README.md`, `RELEASE.md` and `DEVELOPPEMENT.md`, the pack command in `DEVELOPPEMENT.md`, and the `report vX.Y.Z` lines in `engine/tests/lua_tests.lua`.
+
+```powershell
+$v="0.7.1"; $P="$M\dist\Paladins-SmartCounter-8.1-$v.tempest"
+Set-Location $M
+powershell -ExecutionPolicy Bypass -File .\check-version.ps1 $v   # must end with "OK"
+```
 
 **2. Run the tests** (in `engine\`):
 ```powershell
@@ -100,7 +144,6 @@ After a game update, first re-export the game data (see `DEVELOPPEMENT.md`) and 
 
 **3. Build, sign and check the package** (same key, same mod ID):
 ```powershell
-$v="0.6.4"; $P="$M\dist\Paladins-SmartCounter-8.1-$v.tempest"
 & $C mod fingerprint "$K.pub"                # must print 80AD2C078946FE3019DB48BCE76DD8DAD1490829
 & $C mod pack "$M\src" $P --key "$K.key"     # for an existing package: & $C mod sign $P --key "$K.key"
 & $C mod verify $P --game-path $G
@@ -121,9 +164,10 @@ git push origin "v$v"
 **5. GitHub Release**, with the signed package attached and the notes taken from `CHANGELOG.md`:
 ```powershell
 $notes = powershell -ExecutionPolicy Bypass -File "$M\release-notes.ps1" $v
-gh release create "v$v" $P --title "Counter & Shop Helper $v" --notes-file $notes
+gh release create "v$v" $P --title "Counter & Shop Helper $v" --notes-file $notes --verify-tag
+powershell -ExecutionPolicy Bypass -File "$M\check-version.ps1" $v -Released   # must end with "OK" before step 6
 ```
-`release-notes.ps1` copies the `## <version>` section of `CHANGELOG.md` (without its heading line) into `%TEMP%\notes-<version>.md`. It stops with an error if that section is missing or empty.
+`release-notes.ps1` copies the `## <version>` section of `CHANGELOG.md` (without its heading line) into `%TEMP%\notes-<version>.md`. It stops with an error if that section is missing or empty. `--verify-tag` makes `gh` fail instead of creating a tag the push did not send.
 
 **6. Tempest repository**, with the **same** `.tempest` file:
 ```powershell

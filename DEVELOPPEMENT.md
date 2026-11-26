@@ -219,7 +219,7 @@ $P = "$M\dist\Paladins-SmartCounter-8.1-0.7.0.tempest"
 & "$T\tempest-cli.exe" mod install $G $P --replace --defer   # vérification à blanc
 & "$T\tempest-cli.exe" mod install $G $P --replace           # installation réelle
 ```
-- Pour une mise à jour : `version` dans `src\manifest.toml` et `VERSION` dans `main.lua`, section en tête de `CHANGELOG.md`, tests, puis réempaqueter.
+- Pour une mise à jour : numéro choisi selon la section « Versioning » de `RELEASE.md` (MAJOR.MINOR.PATCH, un seul pas après le dernier tag), écrit partout où il figure (`src\manifest.toml`, `VERSION` dans `main.lua`, section en tête de `CHANGELOG.md`, versions affichées dans `README.md` / `RELEASE.md` / ce fichier, ligne `report vX.Y.Z` des tests), vérifié par `check-version.ps1 X.Y.Z`, puis tests et réempaquetage.
 
 ## Prochaines étapes
 1. Valider en jeu les 5 points ci-dessus et corriger selon les résultats (`MODE_MAPS` dans `sc_detect.lua` notamment).
