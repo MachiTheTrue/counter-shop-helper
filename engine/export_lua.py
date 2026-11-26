@@ -1,9 +1,11 @@
-"""Exports engine data and constants to the Lua mod (src/scripts/lib/).
+"""Exports engine data and constants to the Lua mod, and the Lua test expectations.
 
 Writes:
-  sc_data.lua      champions, items and every constant of predictor.py (one source of truth: Python)
-  sc_expected.lua  results computed by predictor.py on reference scenarios, checked in game by
-                   the `smartcounter_selftest` command (Lua port vs Python engine)
+  src/scripts/lib/sc_data.lua   champions, items and every constant of predictor.py (one source of
+                                truth: Python). Game names are NOT exported: only their message ids
+                                (name_msg / desc_msg), translated by the game at run time.
+  engine/tests/expected.lua     results of predictor.py on reference scenarios; tests/lua_tests.lua
+                                checks that the Lua port gives the same results (run_lua_tests.ps1)
 
     python export_lua.py
 """
@@ -16,7 +18,7 @@ sys.path.insert(0, HERE)
 import predictor as P  # noqa: E402
 
 LIB = os.path.normpath(os.path.join(HERE, "..", "src", "scripts", "lib"))
-UI_LANGS = ("en", "fr", "de", "it", "ru", "zh", "ja", "ko")   # 0.6: + IT RU ZH JA KO (fonts per script in main.lua)
+TESTS = os.path.join(HERE, "tests")
 
 SCENARIOS = [
     ("Lian", ["Fernando", "Makoa", "Grohk", "Viktor", "Androxus"], "mid", None, None),
@@ -45,12 +47,10 @@ OWNED_SCENARIOS = [
     ("Io", ["Makoa", "Dredge", "Evie", "Furia", "Androxus"], "mid", None, "heal", {"Hoard": 1}),
     ("Lian", ["Makoa"], "mid", None, None,
      {"Wrecker": 1, "Haven": 1, "Nimble": 1, "Chronos": 1, "Life Rip": 1, "Veteran": 1}),
+    # 4 items owned (off-meta ones included): the game's 4 slots are full, the optional one is blocked
+    ("Io", ["Makoa", "Dredge", "Evie", "Furia", "Androxus"], "mid", None, "heal",
+     {"Hoard": 3, "Nimble": 3, "Chronos": 3, "Wrecker": 3}),
 ]
-
-
-def icon_file(item):
-    """Icon path inside the mod (src/icons/), exported by make_icons.ps1."""
-    return "icons/" + "".join(ch for ch in item if ch.isalnum()) + ".png"
 
 
 def ordered_values(d):
@@ -102,35 +102,24 @@ def build_data(data):
         champs.append({
             "name": c["name"], "role": c["role"], "tier": c["meta_tier_8_1"],
             "hp": c["base_health_8_1"], "pawn": c["pawn_class"], "bot_id": c["bot_id"],
+            "name_msg": c.get("name_msg_id"),
             "tags": c["tags"], "wrecker_effective": c["wrecker_effective"],
             "recs": [{"item": r["item"], "weight": r["weight"], "early": r["early_game_priority"],
                       "key": r["reason_key"], "args": r["reason_args"]} for r in c["recommended_items_against"]],
+            # slot, device id, name message id, effects (strategy tags: stun, pull, shield...)
+            "abilities": [{"slot": x["slot"], "device_id": x["device_id"], "name_msg": x["name_msg_id"],
+                           "fx": x["fx"]} for x in c.get("abilities", [])],
         })
-        if any(v != c["name"] for v in c.get("loc_name", {}).values()):
-            champs[-1]["names"] = {lg: c["loc_name"].get(lg, c["name"]) for lg in UI_LANGS}  # only when a locale really differs (game data)
-    # only the UI languages of sc_lang.lua (ES / PT / PL / TR have no UI table)
-    langs = [lg for lg in data["meta"].get("loc", {}).get("ui_langs", ["en"]) if lg in UI_LANGS]
-    for c, out in zip(data["champions"], champs):
-        # abilities (game data): slot, native name per UI language, effects (stun, pull, shield...)
-        out["abilities"] = [{"slot": a["slot"], "fx": a["fx"],
-                             "names": {lg: a["name"].get(lg) or a["name"].get("en") for lg in langs}}
-                            for a in c.get("abilities", [])]
     items = {}
     for k, v in data["items"].items():
-        e = {"cost": v["cost_per_level"], "category": v["category"], "item_id": v["game_item_id"],
-             "per_level": v.get("per_level"), "alias_ids": v.get("alias_item_ids", []),
-             "icon": icon_file(k), "icon_index": v.get("icon_index")}
-        if v.get("loc_name"):
-            e["names"] = {lg: v["loc_name"].get(lg, k) for lg in langs}
-            e["descs"] = {lg: v["loc_desc"].get(lg, "") for lg in langs if v["loc_desc"].get(lg)}
-        if v.get("inventory_class"):
-            e["inv_class"] = v["inventory_class"]
-        if v.get("alias_inventory_classes"):
-            e["alias_inv"] = v["alias_inventory_classes"]
-        items[k] = e
+        items[k] = {"cost": v["cost_per_level"], "category": v["category"], "item_id": v["game_item_id"],
+                    "alias_ids": v.get("alias_item_ids", []),
+                    "name_msg": v.get("name_msg_id"), "desc_msg": v.get("desc_msg_id"),
+                    "ranks": v.get("ranks", 3)}
+    text_ids = data["meta"].get("text_ids", {})
     return {
         "build": data["meta"]["build"],
-        "generated_by": "engine/export_lua.py (ne pas modifier à la main)",
+        "generated_by": "engine/export_lua.py (do not edit by hand)",
         "champions": champs,
         "items": items,
         "item_order": list(data["items"]),     # shop order (Python dict order = tie-break in build)
@@ -148,15 +137,15 @@ def build_data(data):
         "extra_bot_ids": {int(k): v for k, v in data["meta"].get("extra_bot_ids", {}).items()},
         "phases": list(P.PHASES),
         "max_enemies": P.MAX_ENEMIES,
-        "modes": [{"key": k, "label": v} for k, v in P.MODES.items()],
+        "modes": [{"key": k} for k in P.MODES],   # labels are the Python report's text: not exported
         "mode_factor": P.MODE_ARCHETYPE_FACTOR,
         "phase_by_elapsed": [{"limit": a, "phase": b} for a, b in P.PHASE_BY_ELAPSED],
-        "archetypes": ordered(P.ARCHETYPES),
+        "archetypes": ordered({k: {f: x for f, x in v.items() if f != "label"} for k, v in P.ARCHETYPES.items()}),
         "role_item_factor": P.ROLE_ITEM_FACTOR,
         "phase_blend": P.PHASE_BLEND,
         "phase_item_factor": P.PHASE_ITEM_FACTOR,
         "archetype_scale": P.ARCHETYPE_SCALE,
-        "counters": ordered(P.COUNTERS),
+        "counters": ordered({k: {f: x for f, x in v.items() if f != "why"} for k, v in P.COUNTERS.items()}),   # "why" = report text
         "tier_bonus": P.TIER_BONUS,
         "item_categories": list(P.ITEM_CATEGORIES),
         "styles": {k: ordered_values(v) for k, v in P.STYLES.items()},
@@ -165,10 +154,9 @@ def build_data(data):
         "champ_self_bonus": {k: ordered_values(v) for k, v in P.CHAMP_SELF_BONUS.items()},
         "tag_priority": list(P.TAG_PRIORITY),
         "tag_danger": P.TAG_DANGER,
-        # Native 8.1 loc (extract_loc.py): role and shop-category names as the game shows them.
-        "loc_langs": langs,
-        "loc_roles": {k: {lg: v[lg] for lg in UI_LANGS if lg in v} for k, v in data["meta"].get("loc", {}).get("roles", {}).items()},
-        "loc_categories": {k: {lg: v[lg] for lg in UI_LANGS if lg in v} for k, v in data["meta"].get("loc", {}).get("categories", {}).items()},
+        # message ids of the role and shop-category names (extract_ids.py)
+        "role_msg": text_ids.get("roles", {}),
+        "category_msg": text_ids.get("categories", {}),
     }
 
 
@@ -185,7 +173,8 @@ def build_expected(pred):
         out[-1].update({
             "player": me, "enemies": foes, "phase": phase, "mode": mode or "", "style": style or "",
             "build": [b["item"] for b in r["build"]],
-            "kinds": [b["kind"][0] + ("o" if b["offmeta"] else "") for b in r["build"]],
+            "kinds": [b["kind"][0] + ("o" if b["offmeta"] else "") + ("x" if b["blocked"] else "")
+                      for b in r["build"]],
             "threat1": r["threats"][0]["name"], "threat1_answer": r["threats"][0]["answer"],
             "threat1_abil": [f"{a['tag']}:{a['slot']}:{a['fx'] or ''}" for a in r["threats"][0]["abilities"]],
             "probs": {a["key"]: a["probability"] for a in r["forecast"]},
@@ -210,9 +199,10 @@ def main():
         print("champions_data.json invalide :", *errs, sep="\n  ")
         return 1
     os.makedirs(LIB, exist_ok=True)
-    head = "-- Généré par engine/export_lua.py depuis champions_data.json et predictor.py. Ne pas modifier.\n"
+    os.makedirs(TESTS, exist_ok=True)
+    head = "-- Generated by engine/export_lua.py from champions_data.json and predictor.py. Do not edit.\n"
     write(os.path.join(LIB, "sc_data.lua"), head, build_data(data))
-    write(os.path.join(LIB, "sc_expected.lua"), head, build_expected(P.Predictor(data)))
+    write(os.path.join(TESTS, "expected.lua"), head, build_expected(P.Predictor(data)))
     return 0
 
 

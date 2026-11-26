@@ -5,18 +5,21 @@
 An in-game helper that reads the enemy team and tells you what to buy and who to watch.
 
 ## What it does
-- **Shop plan:** 4 items to buy in order, plus 1 optional 5th item (blue, dashed border) that
-  depends on how the match goes. Each item shows its advised rank and a short reason
-  ("200 HP shield", "heavy CC: shorter stuns and pulls"...).
+- **Shop plan:** Paladins holds 4 items: 4 items to buy in order (count shown out of 4), plus 1
+  optional 5th item (soft blue outline) to swap in depending on the match. It is dimmed and marked
+  "slots full" once your 4 slots are taken. Each item shows its advised rank, a short reason and a
+  coloured mark for its shop category; the next purchase has a gold outline.
 - **Live progress:** your items and ranks are read from the game. Grey = not bought, amber = rank
   in progress, green = advised rank reached. Buying something off-plan re-plans the free slots
-  around it. If live reading is not available, set your items by hand in the Match tab (they start
-  at 0 every session).
+  around it. If live reading is not available, set your items by hand in the Match tab (4 at
+  most; they start at 0 every session and every new match).
 - **Enemy threats:** the enemy champions' own abilities, e.g. "Makoa: Dredge Anchor (stuns)".
 - **Champion select:** counter-picks and the best roles against the enemy team.
 - **8 languages:** English, Français, Deutsch, Italiano, Русский, 简体中文, 日本語, 한국어,
-  or Auto (follows your Steam / game language). Item, role and ability names are the game's own
-  8.1 names; icons are the shop's own art.
+  or Auto (follows the game's language). Champion, item, ability, role and category names are
+  asked from the game while it runs. If the mod shows another language than the game, English
+  names and the mod's own words keep the panel in one language (a setting keeps the game's names).
+  English names are shown until the game has loaded its interface.
 
 ## Keys (all changeable in the menu, all on a 60% keyboard)
 - `Ctrl+J`: menu (match, settings, help)
@@ -26,14 +29,10 @@ An in-game helper that reads the enemy team and tells you what to buy and who to
 - `Ctrl+L`: lock the panel
 
 With the menu open, drag the panel to move it or drag its edge to resize it.
+Console: `smartcounter` opens or closes the menu.
 
 ## Safe by design
 Read-only: the mod never buys, never sends anything to the server and changes no game file.
-Automatic buying is disabled on purpose: Tempest offers no safe shop function (see Help in game).
-
-## Console
-`smartcounter` (menu), `smartcounter_probe` (detection report), `smartcounter_items`,
-`smartcounter_items_watch` (live item reading), `smartcounter_selftest`, `smartcounter_dumpsdk`.
-Reports go to `%TEMP%\tempest-scripting.log`.
+It ships no game art and no game text.
 
 Made by Machi Konno · Discord: machi.konno

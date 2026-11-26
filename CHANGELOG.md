@@ -4,6 +4,115 @@ Target game build: **8.1.5839.0** (Wekono's Wake Hotfix 1). Author: **Machi Konn
 
 One `## X.Y.Z — YYYY-MM-DD` section per version, newest first. Each section is used as-is as the notes of the matching GitHub Release (`vX.Y.Z`); see [RELEASE.md](RELEASE.md). The mod was called "SmartCounter" before 0.6.1, so older entries use that name.
 
+## 0.6.4 — 2026-11-25
+Fixes from the first in-game screenshots of 0.6.3: item chip drawing, the 4-item limit, header noise, champion select timing and mixed languages.
+
+### Item chips
+- The chips are now drawn with ImGui's draw list instead of a progress bar. The category mark sits inside the chip, 6 px from its left edge, so the gold outline of the next purchase (2 px) can no longer cover it or touch it. The label starts after the mark, and is cut with "..." if the panel is too narrow.
+- Calmer palette: darker chip background with a thin outline, muted amber / green fills so the label stays readable on them.
+- The optional 5th item has a soft blue outline and background instead of the dashed box.
+
+### 4 items, like the game
+- Paladins holds 4 items. The item count now reads "items n/4" (it said "/5", counting the optional item).
+- Once 4 items are owned (off-meta ones included), the optional item cannot be bought without selling one: it is dimmed, marked "slots full" (with the explanation in the detailed view and the tooltip), and it is never the next purchase. `blocked` is a new slot field of the engine, in `predictor.py` and its Lua port (parity checked on a new 4-item scenario).
+- The manual item grid accepts 4 items at most; the others are locked until one goes back to 0.
+
+### Less noise in the header
+- "mode unknown" is no longer shown: the mode appears only when it is known (the `mode_unknown` text is removed).
+- The game phase ("early*", "mid*", "late*") is no longer shown when it is automatic: it is a guess from the match clock that tunes the advice. A phase set by hand in the Match tab is shown, without "*".
+
+### Champion select and loading
+- Detection reads 4 times a second in champion select and while the match loads (once a second otherwise), so a quick pick is not missed.
+- Between champion select and the match (no player, or a map without match state yet) the status is now "loading the match", with the pick kept and counter-picks hidden; it used to read "not in a game" or "match over". The pick is read again from the roster while loading, and used in the match until your character exists.
+- A new map without match state and without a champion select before it (training) also reads "loading", not "match over".
+
+### One language on screen
+- Game names were shown in the game's language even when the mod showed another one (French item names in an English panel). Now the game's names are used only when the game runs in the language the mod shows. Otherwise champions and items keep their English names, roles / categories / ability effects use the mod's words, and item descriptions are hidden.
+- New setting *Game names in the client's language* (off by default) for players who know the shop by its names in their game's language but read the mod in another one (English mod on a French client, for example). It changes names only (champions, items, abilities): roles, categories, effects and item descriptions always follow the mod's language, so no French sentence appears in an English panel. Settings shows a tooltip, a hint and a live line "Now: game in …, mod in …, names in …"; the Help tab explains when to use it.
+- Audit of the 8 UI string tables: no French (or other language) text left in another table.
+
+### No game names typed in the mod's sentences
+- The archetype labels ("Shield-heavy (Wrecker value)"...), the special-shield reason and the Wrecker note had item and champion names typed in each language (an English "Wrecker" in the English table, a "Broyeur" typed in the French one). They now have `%s` placeholders filled with the names from `sc_text.lua`: the game's names in the game's language, or the English internal names when the mod shows another language. They always match the shop and follow the names setting.
+- The deployables reason gives the biggest deployable's HP ("deployables (up to 2500 HP)") instead of the objects' English names; `champions_data.json` keeps only a kind and the HP of each deployable.
+- `check_lua.py` now fails if a champion or item name is typed in `sc_lang.lua`.
+
+### Header without repeats
+- The role and the playstyle could show the same word ("Damage (Damage) · Damage"). The playstyle is shown only when the champion has 2 or more playstyles and its label differs from the role, in every language.
+
+### Item ranks
+- Max ranks checked against the game data: every 8.1 shop item (Agile / Nimble included) has 3 ranks, the 3 modes of the item's device. `extract_ids.py` now records `ranks` per item (no fixed 3 any more), and the Python predictor and its Lua port cap owned, read and advised ranks at each item's own max.
+- **Live rank-ups were not followed** (seen in a match: Resilience bought at I, upgraded to III, the panel stayed on "Resilience I/II"). The mod read the inventory object's `m_InventoryData.nLevel` first, and the device's `r_nDeviceLevel` only when `nLevel` was missing. `nLevel` belongs to the purchase record (next to `fAcquiredDatetime` and `nInstanceCount`) and keeps the rank the item was bought at; an upgrade goes through `TgInventoryManager_Player.ChangeDeviceLevel`, which raises the device's `r_nDeviceLevel`. Now the three level fields of the game are read at every poll (device level, scoreboard slot `r_PlayerDevices[].Level` when Tempest lists it, purchase record), each is turned into a rank on its own, and the highest wins: an owned item's rank never goes down, so a stale field can only be lower. The owned rank, the item count, the next target and the plan update within a second of the upgrade.
+- **No more log spam** (`%TEMP%\tempest-scripting.log`, one line per second): Tempest logs every read of a property the object's class does not declare.
+  - `PlayerReplicationInfo ... has no property r_PlayerDevices`: in the lobby the player's PRI is a plain `Engine.PlayerReplicationInfo`; the scoreboard slots are only on `TgRepInfo_Player`. They are now read only on that class (`is_a`), and a slot array Tempest cannot list is not asked again.
+  - `TgPawn_SiegeEngine_CaptureAndPayload ... has no property GetArchetypeBotId`: the Siege payload has a PRI in the match list, and every pawn was asked for its champion's bot id. Champions are now known by their pawn class first (each champion has its own class in the data); a class the data does not list is asked once, only if it is a character (`TgPawn_Character`), and the answer is cached per class. Siege engines / payloads are never asked and never count as enemies.
+  - Device fields (`r_nDeviceLevel`, `CurrentFireMode`) are read only on inventory objects that are `TgDevice`s, the purchase record only on `TgInventoryObject`s.
+- **One log line per item change** for in-game checks: `[smartcounter] items [<class>]: Resilience=2 (dev 2, slot -, buy 1, mode 1); ...` gives, for each item, the rank kept and what each game field said (device level, scoreboard slot, purchase record, device mode). It is written when a value changes (purchase, upgrade, sale), never at every read.
+- **Ranks in a real match come from the shop items (`r_TempItems`)** — found with the diagnostic button in a live match (TDM, Io): the client has **no inventory chain** in a match (`chain none`), so items came from the scoreboard slots `TgRepInfo_Player.r_PlayerDevices`, whose `Level` is the deck cards' level (a card at 5) and stays at **0 for shop items whatever their rank**: Nimble showed 2 pips on the scoreboard and "Agile I" in the panel. The 8.1 declarations have `TgRepInfo_Player.r_TempItems`, an array of `TempItemInfo { nDevId, nRank, nCost }`: the match's shop items with their rank. Now the slots say which items are owned and `r_TempItems[].nRank` gives their rank (counting from 0 or 1 learnt as before); the slot `Level` is no longer read as a rank. The source shown in the Match tab is "PRI.r_PlayerDevices + r_TempItems". The `items [PRI]` log line is written in a match too (it was only written for the inventory chain), with the shop rank, the slot level and count of each item.
+- **Diagnostic block**: also lists the shop items (`r_TempItems`: device, item, rank, cost), the slot count / last known device / power of each scoreboard slot, the size of the shop undo queue and the equipped item modes (`TgPawn.r_EquipDeviceInfo`).
+- **Items read on practice maps** (training, the range): a map without match state and without a champion select before it is shown as "loading", and item reading was paused for every "loading", so items and ranks were never read there and no `items` line was written. Reading is now paused only while a match really loads after a champion select.
+- **The log says why nothing is read**: one line when it changes, never at every read: `status: <status> (map <map>)` (with "practice map" or "item reading paused" when it applies), `items: live from the game (InvManager)`, `items: nothing to read: no character / the character has no inventory / no local player`, and `items: read failed: <error>` once per different error (read errors used to be counted silently).
+- **Diagnostic button** in the menu's Match tab (*Write item details to the log*): one press writes one short block to `tempest-scripting.log` with what the reader sees right now: status, character and player-info classes, each inventory object (class, item id and name, purchase level, device level, mode, device id), the scoreboard slots when they can be listed, the ranks kept and the counting learnt. Only declared fields are read; nothing is written without a press.
+- **Rank on the chips without fractions**: an item owned below its advised rank read "Resilience I/II", which looked like a fraction ("1/2"). It now reads "Resilience I → II" (owned rank → advised rank); "Resilience II" once the advised rank is reached, the advised rank alone for an item to buy. A rank is always clamped to I–III before it is shown.
+- Live ranks: the game's level fields do not say whether they count from 0 or 1. The mod learns it during the session, for each field (a 0 means it counts from 0, a value equal to the max rank means it counts from 1), so a rank is no longer one off; nothing conclusive → counts from 1.
+- Sentinel note fixed: 200 / 400 / 600 HP shield for 5 s on an elimination, stacks 3 times.
+
+### Tests
+- `test_predictor.py`: 79/79 (4-item cases, max ranks, a 2-rank item capped). `check_lua.py`: OK (235 keys × 8 languages, no typed game name). `run_lua_tests.ps1`: 1449 checks (a live match shape: no chain, 49 slots with a deck card at level 5 and items at level 0, Hoard and Nimble bought then Nimble I → II → III through `r_TempItems` counting from 1 and from 0, sold and bought again, one log line per change; the same end to end in the panel and the Match tab; `r_TempItems` that cannot be listed asked once; items read and upgraded on a practice map, loading after champion select paused and said once, the diagnostic button and its block; buy / upgrade / sell / buy again / two items upgraded in the same second with one log line per change; read errors logged once; Wrecker, Nimble and Morale Boost bought at I and upgraded to II and III on a French client with the mod in English and in French: chip rank, items 3/4, one log line per purchase / upgrade / sale and none while nothing changes; chip labels for every rank / target pair without "/" or digits; no lookup of missing properties: Siege payload pawn, lobby PRI, slot array that cannot be listed, inventory objects that are not devices; raw levels logged once per change; chip geometry, dimmed blocked chip, "n/4", header without repeats, names per UI language and setting, names inside sentences, ranks counted from 0 or 1, an item bought at I and upgraded to II and III next to 2 other items: reader, plan and panel, with the device level counting from 0 or 1, with the scoreboard slots only, and with the purchase record left at I as in the game, quick pick / loading / training, 4-item manual grid, polling pace).
+
+## 0.6.3 — 2026-11-25
+Resubmission after review: names are asked from the game instead of being shipped, no game art or game text in the package, game reading through Tempest's reflection API only, and the code split into small modules.
+
+### Names from the running game
+- Champion, item, ability, role and shop category names, and item descriptions, are now asked from the game while it runs (`UIMoviePlayer.usc_TranslateMsgId` on the HUD movie, new `lib/sc_text.lua`). They are always in the game's own language and cached per message id.
+- Until the game has loaded its interface (first seconds after launch), the English internal names are shown; roles and categories use the mod's own words.
+- Auto language follows `GetLanguage()` from the game. The mod no longer reads Steam's `appmanifest_444090.acf` or the game's `ChaosEngine.ini`.
+- `sc_data.lua` holds only ids (bot ids, pawn classes, item ids, message ids) and the mod's strategy data: 201 KB → 88 KB, ASCII only.
+
+### No game assets shipped
+- The 20 shop icons (`src/icons/`) are removed. Each item chip has a small coloured mark for its shop category instead, drawn with ImGui.
+- `engine/extract_loc.py` and its `loc_8_1.json` (game texts in 12 languages) are replaced by `engine/extract_ids.py` and `game_ids_8_1.json`, which hold message ids only. `engine/make_icons.ps1` is removed. `champions_data.json` no longer carries the English shop texts.
+
+### Game reading through the proper APIs
+- My champion and the enemies: `TgPawn_Character.GetArchetypeBotId()`, with the pawn class as fallback.
+- Teams: `TgRepInfo_Player.GetTaskForceNumber()`. Fix: the old code read `r_TaskForce`, which is the team object and not a number, so teams always came from the fallback.
+- Owned items: `Pawn.InvManager.InventoryChain` → `m_InventoryData { nItemId, nLevel }`, else the replicated device slots. The guessed field lists and the raw memory reads are removed.
+- Fonts: `ui.add_font` through `tempest.queue` only; the raw ImGui FFI (`ui.C`) font-scaling fallback is removed.
+- Settings: `tempest.config` / `tempest.save_config`, saved once a second after the last change.
+
+### Debug helpers removed
+- Only the `smartcounter` console command is left. `smartcounter_probe`, `smartcounter_selftest`, `smartcounter_items`, `smartcounter_items_watch` and `smartcounter_dumpsdk` are removed, with their texts in the 8 languages.
+- `lib/sc_expected.lua` (reference results shipped for the in-game selftest) moves out of the package to `engine/tests/expected.lua`; the parity test now runs offline.
+
+### Code split for review
+- `main.lua` goes from 1,694 to about 200 lines: it only wires the modules and runs the frame.
+- New modules: `sc_text` (game names), `sc_config` (settings), `sc_keys` (hotkeys and rebinding), `sc_match` (inputs → prediction), `sc_fonts`, `sc_gui` (guarded ImGui, palette, theme), `sc_view` (panel), `sc_menu` (menu and tutorial).
+- Fixed: after a match, the menu's status line showed the raw key `st_match_over`; it now reads "match over" in all 8 languages.
+- Fixed: game placeholders like `{10|-1}s` showed as "10/-1s"; they now show the value only ("10s").
+- The unused `lvl` text is removed.
+- Help, "Automatic buying": corrected. Tempest *can* hook game functions (0.6.1 said it couldn't); the mod still never buys and never sends anything. The sentence about the game's own auto-buy option is removed, since it was not verified.
+
+### Fixed in the verification pass (late, empty or changing game answers)
+- A name the game had not loaded yet (empty answer) stayed in English for the whole session. It is now asked again after 5 s, at most 3 times per id, and again when a new HUD appears; a language change forgets the names of the old language.
+- Game text cleaning: `<br>` becomes a space, `&amp;` / `&lt;` / `&gt;` / `&quot;` / `&apos;` / `&nbsp;` are decoded.
+- Fonts: a load still queued when the mod was reloaded stayed "loading" forever; it now starts again. A `tempest.queue` that never runs is retried (3 times), then the default font is used; `ui.add_font` is never called while drawing. A Japanese / Korean / Chinese font set built before the game's names arrived is rebuilt (at most twice) once they are known, and the previous set is used until the new one is ready.
+- After a match, the HUD keeps the last roster: back in the lobby this was read as a new champion select. A roster already seen in a match now stays "lobby"; a new roster (new match id or names) is a new champion select.
+- The champion cache by player (PRI) is dropped when the map changes, so a PRI at a reused address cannot keep the last match's champion.
+- While dead (no pawn), my champion and the items read live are kept instead of falling back to "not detected" and the manual grid.
+- Manual item ranks belong to one game: they are emptied when a new champion select starts, and are no longer saved to the config file.
+- Saved manual champion picks are checked at load: unknown names are dropped, aliases become the canonical name.
+- Hotkeys and the console command only queue their action; the next frame runs it on the draw thread (`ui.capture` and toasts were called from the key callback).
+- Escape while rebinding a key cancels the rebinding without also closing the menu.
+- Champion lists in the Match tab are sorted by the name shown (the game's, in its language), not by the internal English name.
+
+### Tests
+- New `engine/tests/run_lua_tests.ps1`: runs `lua_tests.lua` with the game's own `Lua51.dll`, with `tempest`, `ui` and the game objects simulated. 815 checks: Lua/Python predictor parity on 20 scenarios, the text, item and detection modules, and `main.lua` end to end (every game state, the 8 languages, the 3 tabs, key rebinding, debounced saving, hot reload), and the edge cases above: late / empty / missing translator, HUD loss and language change, font queue never run and CJK rebuild, lobby after a match, PRI reuse across maps, death, new game. Every frame checks balanced ImGui stacks, no draw error, no raw text key / format code / game markup on screen and no global variable created.
+- `check_lua.py`: checks the text keys used by every module, that `sc_data.lua` is ASCII only, and that no icon, debug command, raw memory read, FFI call or Steam / game file read is left.
+- `test_predictor.py`: 74/74 (new checks: no game text copied, every message id present).
+
+### Not verified in game yet
+- `usc_TranslateMsgId`, `GetLanguage`, `GetArchetypeBotId`, `GetTaskForceNumber` and the inventory chain are used as the 8.1 classes declare them, but have only been run against simulated objects so far. If one of them does not answer, the fallbacks listed above apply.
+- Also to confirm in game: that `m_Match.dwMatchId` changes between matches (it names a game), that `nLevel` counts ranks from 1, and that a font set queued with `tempest.queue` is ready on the next frame.
+
 ## 0.6.2 — 2026-11-25
 Public release preparation.
 
@@ -44,6 +153,7 @@ Public release preparation.
 
 ### Automatic buying: disabled, explained in Help
 - Checked again: Tempest Scripting exposes no shop function and no way to intercept a game function (only `on_key` and `on_game_thread`). Buying would mean calling the raw server functions `ServerPurchaseItem` / `ServerUpgradeItem` with loot-table IDs that can't be verified.
+  - *Correction (0.6.3): wrong. Tempest Scripting does have game-function hooks (`tempest.on` / `tempest.before`). The decision stays the same: the mod never buys.*
 - There is no automatic-buy setting in Settings (there never was one in the code).
 - Help, in all 8 languages: the section is titled "Automatic buying: disabled". It explains that the feature was dropped and has no setting, because there is no safe shop function, and that the mod only reads the game.
 

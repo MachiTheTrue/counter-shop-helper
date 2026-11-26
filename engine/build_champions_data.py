@@ -27,71 +27,56 @@ TIERS = ("S+", "S", "A", "B", "C", "D")
 # Broyeur). Several items exist twice in assembly.dat (old card + new shop row): `game_item_id` is
 # the row used for names / descriptions, `alias_item_ids` the other rows carrying the same name
 # (live detection accepts all of them). No Cauterize / Illuminate / Kill to Heal in this shop.
-# Value = per level (level 1/2/3 = value x1/x2/x3); cost = per level. icon_index = frame of the
-# game's "ItemCards" sprite (itemimagestack movie, GameUI_SF.upk) = DATA_SET_ICONS.ICON_INDEX.
+# Value = per level (level 1/2/3 = value x1/x2/x3); cost = per level. Names and descriptions are
+# not stored: the mod asks the game for them (name_msg_id / desc_msg_id from game_ids_8_1.json).
 ITEMS = {
     # Defense
-    "Resilience": {"category": "Defense", "game_item_id": 11683, "alias_item_ids": [29446], "icon_index": 2,
-                   "cost_per_level": 200, "per_level": 25,
-                   "game_text": "Reduce the duration or effectiveness of Crowd Control effects by {25}%."},
-    "Sentinel": {"category": "Defense", "game_item_id": 33075, "alias_item_ids": [], "icon_index": 20,
-                 "cost_per_level": 225, "per_level": 200,
-                 "game_text": "Gain a {200} health Shield for 5s on earning an Elimination. Stacks 3 times."},
-    "Guardian": {"category": "Defense", "game_item_id": 13228, "alias_item_ids": [], "icon_index": 13,
-                 "cost_per_level": 250, "per_level": 20,
-                 "game_text": "Increase the effectiveness of Shields you create by {20}%."},
-    "Blast Shields": {"category": "Defense", "game_item_id": 33618, "alias_item_ids": [], "icon_index": 12,
-                      "cost_per_level": 275, "per_level": 6,
-                      "game_text": "Reduce the Damage you take from Area of Effect attacks by {6}%."},
-    "Haven": {"category": "Defense", "game_item_id": 13229, "alias_item_ids": [29436], "icon_index": 16,
-              "cost_per_level": 300, "per_level": 6,
-              "game_text": "Reduce the Damage you take from Direct attacks by {6}%."},
+    "Resilience": {"category": "Defense", "game_item_id": 11683, "alias_item_ids": [29446],
+                   "cost_per_level": 200, "per_level": 25},
+    "Sentinel": {"category": "Defense", "game_item_id": 33075, "alias_item_ids": [],
+                 "cost_per_level": 225, "per_level": 200},
+    "Guardian": {"category": "Defense", "game_item_id": 13228, "alias_item_ids": [],
+                 "cost_per_level": 250, "per_level": 20},
+    "Blast Shields": {"category": "Defense", "game_item_id": 33618, "alias_item_ids": [],
+                      "cost_per_level": 275, "per_level": 6},
+    "Haven": {"category": "Defense", "game_item_id": 13229, "alias_item_ids": [29436],
+              "cost_per_level": 300, "per_level": 6},
     # Utility
-    "Nimble": {"category": "Utility", "game_item_id": 11826, "alias_item_ids": [29453], "icon_index": 6,
-               "cost_per_level": 125, "per_level": 10, "game_text": "Gain {10}% Movement Speed."},
-    "Hoard": {"category": "Utility", "game_item_id": 33081, "alias_item_ids": [], "icon_index": 25,
-              "cost_per_level": 200, "per_level": 10,
-              "game_text": "Gain {10} Credits on Elimination and 10 every {30|-10}s."},
-    "Cavalier": {"category": "Utility", "game_item_id": 33083, "alias_item_ids": [11646, 29448], "icon_index": 3,
-                 "cost_per_level": 225, "per_level": 15,
-                 "game_text": "Increase your Mount Speed by {15}%. Gain a {100} health Shield after mounting."},
-    "Morale Boost": {"category": "Utility", "game_item_id": 13165, "alias_item_ids": [29447], "icon_index": 10,
-                     "cost_per_level": 250, "per_level": 10,
-                     "game_text": "Increase your base Ultimate Charge Rate by {10}%."},
-    "Chronos": {"category": "Utility", "game_item_id": 11723, "alias_item_ids": [29451], "icon_index": 8,
-                "cost_per_level": 300, "per_level": 10,
-                "game_text": "Reduce the Cooldown of all your abilities by {10}%."},
+    "Nimble": {"category": "Utility", "game_item_id": 11826, "alias_item_ids": [29453],
+               "cost_per_level": 125, "per_level": 10},
+    "Hoard": {"category": "Utility", "game_item_id": 33081, "alias_item_ids": [],
+              "cost_per_level": 200, "per_level": 10},
+    "Cavalier": {"category": "Utility", "game_item_id": 33083, "alias_item_ids": [11646, 29448],
+                 "cost_per_level": 225, "per_level": 15},
+    "Morale Boost": {"category": "Utility", "game_item_id": 13165, "alias_item_ids": [29447],
+                     "cost_per_level": 250, "per_level": 10},
+    "Chronos": {"category": "Utility", "game_item_id": 11723, "alias_item_ids": [29451],
+                "cost_per_level": 300, "per_level": 10},
     # Healing
-    "Meditation": {"category": "Healing", "game_item_id": 33082, "alias_item_ids": [], "icon_index": 1,
-                   "cost_per_level": 175, "per_level": 2.5,
-                   "game_text": "Heal for an additional {2.5}% of your max health every 0.25s when out of combat."},
-    "Life Rip": {"category": "Healing", "game_item_id": 12010, "alias_item_ids": [29457], "icon_index": 9,
-                 "cost_per_level": 225, "per_level": 20, "game_text": "Your weapon shots gain +{20}% Lifesteal."},
+    "Meditation": {"category": "Healing", "game_item_id": 33082, "alias_item_ids": [],
+                   "cost_per_level": 175, "per_level": 2.5},
+    "Life Rip": {"category": "Healing", "game_item_id": 12010, "alias_item_ids": [29457],
+                 "cost_per_level": 225, "per_level": 20},
     # Two Rejuvenate rows: 14633 "healing output +10%" (most recently modified, purchasable) and 33517
     # "+10% healing received". 14633 is used; unverified in game.
-    "Rejuvenate": {"category": "Healing", "game_item_id": 14633, "alias_item_ids": [33517], "icon_index": 21,
-                   "cost_per_level": 250, "per_level": 10, "game_text": "Increase your healing output by {10}%."},
-    "Veteran": {"category": "Healing", "game_item_id": 13224, "alias_item_ids": [29438], "icon_index": 15,
-                "cost_per_level": 275, "per_level": 6, "game_text": "Increase your Base Maximum Health by {6}%."},
-    "Bloodbath": {"category": "Healing", "game_item_id": 33070, "alias_item_ids": [], "icon_index": 11,
-                  "cost_per_level": 300, "per_level": 360,
-                  "game_text": "Kills True Heal you and Eliminations True Heal you & the ally who got the kill for {360} Health over 4s."},
+    "Rejuvenate": {"category": "Healing", "game_item_id": 14633, "alias_item_ids": [33517],
+                   "cost_per_level": 250, "per_level": 10},
+    "Veteran": {"category": "Healing", "game_item_id": 13224, "alias_item_ids": [29438],
+                "cost_per_level": 275, "per_level": 6},
+    "Bloodbath": {"category": "Healing", "game_item_id": 33070, "alias_item_ids": [],
+                  "cost_per_level": 300, "per_level": 360},
     # Weapon
-    "Bulldozer": {"category": "Weapon", "game_item_id": 13079, "alias_item_ids": [29458], "icon_index": 23,
+    "Bulldozer": {"category": "Weapon", "game_item_id": 13079, "alias_item_ids": [29458],
                   "cost_per_level": 150, "per_level": 50,
-                  "game_text": "Your weapon shots deal {50}% increased damage to Deployables, Pets and Illusions.",
                   "affects": "Murs d'Inara/Azaan, tourelles de Barik et Vivian, totem de Grohk, illusions de Ying/Evie, mines de Kinessa, pièges de Kasumi, grenades de VII, pièces de Saati, bombes de Bomb King, ailes de Nyx."},
-    "Deft Hands": {"category": "Weapon", "game_item_id": 13235, "alias_item_ids": [], "icon_index": 7,
-                   "cost_per_level": 200, "per_level": 20, "game_text": "Increase your Reload Speed by {20}%."},
-    "Lethality": {"category": "Weapon", "game_item_id": 31100, "alias_item_ids": [29454], "icon_index": 19,
-                  "cost_per_level": 200, "per_level": 20,
-                  "game_text": "Increase your Movement Speed by {20}% and Jump Height by {60}% for 5s after getting an Elimination."},
-    "Trigger Scent": {"category": "Weapon", "game_item_id": 33071, "alias_item_ids": [33079, 29461], "icon_index": 26,
-                      "cost_per_level": 250, "per_level": 6,
-                      "game_text": "Increase your inhand weapon damage dealt by {6}% for 5s after getting an Elimination."},
-    "Wrecker": {"category": "Weapon", "game_item_id": 13071, "alias_item_ids": [29456], "icon_index": 18,
+    "Deft Hands": {"category": "Weapon", "game_item_id": 13235, "alias_item_ids": [],
+                   "cost_per_level": 200, "per_level": 20},
+    "Lethality": {"category": "Weapon", "game_item_id": 31100, "alias_item_ids": [29454],
+                  "cost_per_level": 200, "per_level": 20},
+    "Trigger Scent": {"category": "Weapon", "game_item_id": 33071, "alias_item_ids": [33079, 29461],
+                      "cost_per_level": 250, "per_level": 6},
+    "Wrecker": {"category": "Weapon", "game_item_id": 13071, "alias_item_ids": [29456],
                 "cost_per_level": 300, "per_level": 50,
-                "game_text": "Your weapon attacks deal {50}% increased Damage to Shields.",
                 "affects": "Boucliers déployés (classe TgDeploy_Shield*) : Fernando, Makoa, Khan, Barik (barricade), Ash (Siege Shield), Nyx, Vivian.",
                 "does_not_affect": "Murs/déployables non-bouclier (Inara Impasse, Azaan Wall), boucliers spéciaux (Atlas)."},
 }
@@ -109,7 +94,7 @@ def champ(name, role, hp, tier, tags, shield_kind=None, deployables=(), note=Non
 champ("Ash", "Frontline", 4500, "A", ["heavy_cc"], "standard", [("Siege Shield", 4750)])
 champ("Atlas", "Frontline", 4000, "A", ["heavy_cc", "high_mobility"], "special",
       note="Ses protections ne sont pas des boucliers déployés : Wrecker n'a pas de valeur contre lui.")
-champ("Azaan", "Frontline", 4500, "A", ["heavy_cc"], None, [("Azaan Wall", 2500), ("Azaan Wall Effect Field", 1200)],
+champ("Azaan", "Frontline", 4500, "A", ["heavy_cc"], None, [("Azaan Wall", 2500), ("Azaan wall zone", 1200)],
       note="Son mur (Azaan Wall, classe TgDeploy_AzaanWall) est un déployable, pas un bouclier : Bulldozer oui, Wrecker non.")
 champ("Barik", "Frontline", 3400, "B", ["blaster"], "standard",
       [("Barik Barricade", 4500), ("Turret", 1000), ("Flame Turret", 1800)],
@@ -236,9 +221,9 @@ def recommended_items(c):
         add("Wrecker", 1, 1, "Bouclier spécial : Wrecker sans effet.", "special_shield")
     if other_dep:
         big = max([hp or 0 for _, hp in other_dep])
-        names = ", ".join(n for n, _ in other_dep)
+        # the reason carries the biggest deployable's HP, not the objects' names (game text)
         add("Bulldozer", 9 if big >= 2000 else (7 if big >= 1000 else 5), 7 if big >= 1000 else 4,
-            "Déployables/illusions : " + names + ".", "deployables", names)
+            f"Déployables/illusions (jusqu'à {big} PV).", "deployables", str(big))
         if c["name"] in ("Inara", "Azaan"):
             add("Wrecker", 1, 1, "Mur déployable, pas un bouclier : Wrecker sans effet.", "wall_not_shield")
     if "heavy_cc" in t:
@@ -278,20 +263,20 @@ def notes(c):
     return out
 
 
-LOC_PATH = os.path.join(HERE, "loc_8_1.json")
+IDS_PATH = os.path.join(HERE, "game_ids_8_1.json")
 
 
-def load_loc():
-    """Native game names (extract_loc.py). Missing file -> official English names only."""
-    if not os.path.isfile(LOC_PATH):
-        print(f"{LOC_PATH} absent : noms anglais seulement (lancer extract_loc.py)")
+def load_ids():
+    """Message ids and ability effects (extract_ids.py). Missing file -> no game names in the mod."""
+    if not os.path.isfile(IDS_PATH):
+        print(f"{IDS_PATH} absent : lancer extract_ids.py")
         return None
-    with open(LOC_PATH, encoding="utf-8") as f:
+    with open(IDS_PATH, encoding="utf-8") as f:
         return json.load(f)
 
 
 def build():
-    loc = load_loc()
+    ids = load_ids()
     names = set()
     champions = []
     for c in C:
@@ -318,21 +303,22 @@ def build():
             "tags": sorted(set(tags)),
             "shield_kind": c["shield_kind"],
             "wrecker_effective": c["shield_kind"] == "standard",
-            "deployables_8_1": [{"name": n, "health": hp} for n, hp in c["deployables"]],
+            "deployables_8_1": [{"kind": "shield" if ("Shield" in n or "Barricade" in n) else "other", "health": hp}
+                                for n, hp in c["deployables"]],
             "8_1_notes": notes(c),
             "recommended_items_against": recommended_items(c),
         })
-        if loc and c["name"] in loc["champions"]:
-            champions[-1]["loc_name"] = loc["champions"][c["name"]]["name"]
-            champions[-1]["abilities"] = loc["champions"][c["name"]].get("abilities", [])
+        gc = (ids or {}).get("champions", {}).get(c["name"])
+        if gc:
+            champions[-1]["name_msg_id"] = gc["name_msg_id"]
+            champions[-1]["abilities"] = gc.get("abilities", [])
     items = json.loads(json.dumps(ITEMS))
     for name, it in items.items():
-        li = (loc or {}).get("items", {}).get(name)
-        if li:
-            it["loc_name"] = li["name"]
-            it["loc_desc"] = li.get("desc", {})
-            it["inventory_class"] = li.get("inventory_class")
-            it["alias_inventory_classes"] = li.get("alias_inventory_classes", [])
+        gi = (ids or {}).get("items", {}).get(name)
+        if gi:
+            it["name_msg_id"] = gi["name_msg_id"]
+            it["desc_msg_id"] = gi["desc_msg_id"]
+        it["ranks"] = (gi or {}).get("ranks", 3)   # max shop rank, from the game's device modes
     data = {
         "meta": {
             "game": "Paladins",
@@ -350,12 +336,12 @@ def build():
             "item_levels": "Valeur et coût par niveau ; niveau 1/2/3 = x1/x2/x3.",
             "shop": "20 objets, 4 catégories x 5 ; plusieurs objets par catégorie autorisés (0.5).",
             "generated_by": "build_champions_data.py",
-            "loc": {
-                "source": loc["meta"]["source"] if loc else None,
-                "ui_langs": loc["meta"]["ui_langs"] if loc else ["en"],
-                "roles": loc["roles"] if loc else {},
-                "categories": loc["categories"] if loc else {},
-                "report": loc["report"] if loc else {"unmapped": ["loc_8_1.json absent"]},
+            # Names are shown from the game at run time: only their message ids are kept.
+            "text_ids": {
+                "source": ids["meta"]["source"] if ids else None,
+                "roles": ids["roles"] if ids else {},
+                "categories": ids["categories"] if ids else {},
+                "unmapped": ids["unmapped"] if ids else ["game_ids_8_1.json absent"],
             },
         },
         "items": items,

@@ -1,193 +1,179 @@
 # Counter & Shop Helper — notes de développement
 
-Notes techniques : structure, moteur, données du jeu, tests et procédure en jeu. La présentation pour les joueurs est dans [README.md](README.md), l'historique dans [CHANGELOG.md](CHANGELOG.md), la publication (Tempest et GitHub) dans [RELEASE.md](RELEASE.md).
-
-> Les scripts `engine\extract_loc.py` et `engine\make_icons.ps1` lisent les exports du jeu dans `..\..\Work\Extracted\8.1.5839.0\`, hors de ce dépôt (ignoré par git). Les fichiers qu'ils produisent (`loc_8_1.json`, `src\icons\`) sont versionnés, ce qui permet de reconstruire le reste sans le jeu.
+Notes techniques : architecture, sources des données, tests et validation en jeu. La présentation pour les joueurs est dans [README.md](README.md), l'historique dans [CHANGELOG.md](CHANGELOG.md), la publication (Tempest et GitHub) dans [RELEASE.md](RELEASE.md).
 
 | | |
 |---|---|
-| Nom affiché | **Counter & Shop Helper** (depuis la 0.6.1 ; dossier, id, nom des paquets et commandes `smartcounter*` inchangés) |
+| Nom affiché | **Counter & Shop Helper** (dossier, id, nom des paquets, commande `smartcounter` et préfixe de log `[smartcounter]` inchangés) |
 | id | `paladins-smartcounter-81` |
-| Version | 0.6.2 (voir [CHANGELOG.md](CHANGELOG.md) ; fiche de publication : [RELEASE.md](RELEASE.md)) |
+| Version | 0.6.4 (voir [CHANGELOG.md](CHANGELOG.md)) |
 | Auteur | Machi Konno (Discord : machi.konno) |
 | Type | Mod Lua (dépend de `tempest-scripting`) + moteur Python hors jeu (`engine\`) |
-| Paquet | `dist\Paladins-SmartCounter-8.1-0.6.2.tempest` (signé, `trusted`), installé sur l'instance 8.1 le 25/11/2026 (remplace la 0.6.1) ; pas encore publié |
-| État | Moteur Python testé (71/71), contrôles Lua hors jeu OK (`check_lua.py`). Le Lua n'est **toujours pas exécuté localement** : à valider en jeu avec `smartcounter_selftest` (20 scénarios) puis `smartcounter_probe`, qui inclut la lecture des objets |
+| Signature | clé `machi-konno-v2`, empreinte `80AD2C078946FE3019DB48BCE76DD8DAD1490829` (la clé privée reste dans `%USERPROFILE%\.tempest-keys\`) |
+| État | Python : 79/79. Lua hors jeu : `check_lua.py` OK et `run_lua_tests.ps1` (1449 vérifications, Lua 5.1 du jeu, objets du jeu simulés). **Non vérifié en jeu** : voir [À valider en jeu](#à-valider-en-jeu) |
 
+## Ce qui vient du jeu, ce qui est livré
+Le mod ne livre **aucun texte ni aucune image du jeu**. Ce qui peut être demandé au jeu pendant la partie l'est ; le reste est de la donnée de stratégie propre au mod.
+
+| Donnée | Source à l'exécution | Repli si le jeu ne répond pas |
+|---|---|---|
+| Noms des champions, objets, compétences, rôles, catégories | `UIMoviePlayer.usc_TranslateMsgId(id)` sur `pc.myHUD.m_pMovie`, dans la langue du jeu (`sc_text.lua`), **seulement si c'est la langue affichée par le mod** (ou réglage `game_names`) | nom interne anglais (champion, objet) ; texte du mod `role_*` / `cat_*` ; mot générique `tag_*` / `fx_*` pour une compétence |
+| Descriptions des objets (infobulle, menu) | idem, `desc_msg_id`, même règle de langue | pas de description |
+| Langue du jeu (UI en Auto) | `Object.GetLanguage()` → `INT`, `FRA`, `JPN`… | anglais |
+| Mon champion, alliés, ennemis | `TgPawn_Character.GetArchetypeBotId()` ; équipe par `TgRepInfo_Player.GetTaskForceNumber()` | classe du pawn (`TgPawn_*`), puis `IsFriendlyWithLocalPawn()` ; choix manuel dans l'onglet Partie |
+| Sélection des champions | `myHUD.m_pMovie.m_UIDataManager.m_Match.MatchMembers[i].m_CurrentAllyCustomizeState.nBotId` | choix manuel |
+| Objets possédés et rangs | **En match, le client n'a pas de chaîne d'inventaire** (diagnostic en partie) : quels objets = emplacements `TgRepInfo_Player.r_PlayerDevices[].CurrentDeviceId` (leur `Level` est le niveau des cartes, 0 pour un objet quel que soit son rang) ; quel rang = `TgRepInfo_Player.r_TempItems[]` (`TempItemInfo { nDevId, nRank, nCost }`). Hors match, si la chaîne existe : quels objets : `Pawn.InvManager.InventoryChain` → `m_InventoryData.nItemId`. Quel rang : le plus haut de trois champs lus à chaque lecture, `TgDevice.r_nDeviceLevel` (monté par `ChangeDeviceLevel` à chaque amélioration), `r_PlayerDevices[].Level` (les pastilles du tableau des scores, si Tempest le liste) et `m_InventoryData.nLevel` (fiche d'achat : **reste au rang acheté**). Base 0 ou 1 apprise par champ pendant la session (`bases` : un 0 lu → base 0, une valeur égale au rang max → base 1), rang plafonné au rang max de l'objet (`ranks`, 3 modes du device dans les données 8.1) | `PRI.r_PlayerDevices` (`CurrentDeviceId`, `Level`) si c'est une liste ; sinon grille manuelle |
+| Phase, carte, mode | `GRI.ElapsedTime`, chemin de `WorldInfo`, classe du GRI | réglage manuel ; mode inconnu = neutre |
+
+**Livré dans `sc_data.lua` (ASCII pur, aucun texte du jeu) :**
+- les **identifiants** qui servent à interroger le jeu : `bot_id`, classe de pawn, identifiants d'objet et leurs alias, identifiants de message (`name_msg`, `desc_msg`, `role_msg`, `category_msg`) ;
+- la **donnée de stratégie** du mod : rôles, tiers, PV de base, tags, contres recommandés, effets des compétences (`fx`, déduits hors jeu), coûts, catégories, poids du moteur.
+
+**Une seule langue à l'écran (`TX:set_view`, appelé à chaque image par `main.lua`).** Le traducteur du jeu ne parle que la langue du client. Si le mod affiche une autre langue (interface anglaise sur un client français, chinoise sur un client espagnol…), mélanger les deux donnait des noms français dans un panneau anglais. Règle : `TX.UI_LANG[GetLanguage()] == langue affichée` → noms du jeu ; sinon noms internes anglais (champions, objets), mots du mod (`role_*`, `cat_*`, `fx_*` / `tag_*`) et pas de description. Langue du jeu inconnue → noms du jeu (rien de mieux). Le réglage `game_names` (désactivé par défaut) garde les noms du jeu ; les polices CJK suivent déjà la langue du jeu (`F:group`), donc pas de carrés vides. Tous les textes du jeu restent lus pour les glyphes CJK.
+
+**Sources externes : aucune.** Pas de wiki, pas de site de fans, pas de copie de textes : ce serait du texte du jeu livré avec le mod, ce que la revue refuse. L'API publique de Hi-Rez (clé développeur requise) ne sert que le jeu actuel, pas la 8.1.5839.0, et le mod n'envoie rien sur le réseau. Les noms anglais de repli sont les identifiants internes des tables (`sc_data.lua`, ASCII), pas une traduction.
+
+**Ne peut pas être demandé au jeu :**
+- les **icônes** : `ui.load_image` n'ouvre que des fichiers image, et les icônes du jeu sont dans ses paquets, pas en fichiers ; les extraire pour les livrer est ce que la revue refuse. Les pastilles portent à la place une marque de couleur dessinée par catégorie (`G.CATEGORY_RGB`) ;
+- la **donnée de stratégie** (tiers, tags, contres) : elle n'existe pas dans le jeu, c'est l'avis du mod.
+
+**Réponses tardives, vides ou changeantes du jeu :**
+- **Traducteur** : une réponse vide (le jeu n'a pas encore chargé ce texte) n'est pas mise en cache ; l'identifiant est redemandé 5 s plus tard, 3 fois au plus, puis de nouveau à l'apparition d'un nouveau HUD. Sans HUD (changement de carte), les noms déjà obtenus restent. Un changement de langue vide le cache.
+- **Polices** : chargées seulement par `tempest.queue` (jamais pendant le dessin). File jamais exécutée : 3 essais, puis police par défaut. Un jeu de police CJK construit avant l'arrivée des noms du jeu est reconstruit (2 fois au plus, 5 s après le précédent) ; l'ancien sert pendant le chargement. Un chargement en cours lors d'un rechargement à chaud repart de zéro.
+- **Choix rapide et chargement** : en sélection et pendant le chargement, la détection lit 4 fois par seconde (`DET.FAST_INTERVAL`), sinon 1 fois. Après une sélection, tant que la partie charge (pas de joueur, ou carte sans GRI) l'état est `loading` pendant `DET.LOADING_GRACE` (60 s) au plus, avec le choix vu (relu dans la composition si le HUD l'a déjà) ; le contexte est « partie » (contre-choix masqués). En partie, avant que mon pawn existe, mon champion vient de la composition de cette partie (seulement celle de la sélection qui vient d'être vue). Une carte sans GRI et sans sélection avant (entraînement) est aussi `loading`, plus `match_over`.
+- **Sélection des champions** : le HUD garde la composition de la dernière partie après celle-ci. Une composition (`dwMatchId` + noms des joueurs) déjà vue en partie reste « lobby » ; une nouvelle est une nouvelle sélection, et vide les rangs d'objets saisis à la main pour la partie précédente.
+- **Carte** : au changement de `WorldInfo`, le cache champion par PRI est vidé (adresse réutilisée possible).
+- **Mort** (pas de pawn) : mon champion et les objets lus en direct sont gardés tant que la carte ne change pas.
+- **4 objets** : Paladins en porte 4 (`D.core_slots`). Le moteur (Python et Lua) marque `blocked` un emplacement non possédé quand 4 objets sont possédés, et ne le propose jamais comme prochain achat. Le panneau affiche « objets n/4 », atténue la pastille bloquée et la marque « emplacements pleins » ; la grille manuelle bloque un 5e objet.
+- **En-tête** : champion (rôle), style, mode s'il est connu. La phase n'apparaît que si elle est réglée à la main (la phase automatique est une estimation par l'horloge : elle règle les conseils, ce n'est pas une information). Plus de « mode inconnu » ni de « * ».
+- **Réglages** : les rangs d'objets manuels ne sont pas sauvegardés (ils valent pour une partie) ; les champions choisis à la main sont vérifiés au chargement (inconnu → vide, alias → nom canonique).
+- **Touches** : le rappel de `tempest.on_key` et la commande ne font que mettre l'action en file ; elle s'exécute à l'image suivante, sur le fil de dessin.
+
+Les identifiants viennent des données du jeu 8.1.5839.0 et ne changent qu'avec une mise à jour du jeu (relancer `extract_ids.py`).
+
+## Structure
 ```
 Paladins-SmartCounter-8.1\
 ├─ src\                         ← ce qui est empaqueté
 │  ├─ manifest.toml
 │  ├─ icon.png                  GÉNÉRÉ : logo du mod, 512×512, art original (engine\make_logo.py)
-│  ├─ README.md                 (texte affiché par le Launcher, en anglais)
-│  ├─ icons\                    GÉNÉRÉ : 20 icônes de la boutique (art du jeu, 48×37)
+│  ├─ README.md                 texte affiché par le Launcher (anglais)
 │  └─ scripts\
-│     ├─ main.lua               astuce, tutoriel, menu, panneau, thème/polices, touches, réglages, commandes
+│     ├─ main.lua               assemble les modules et dessine l'image (aucune logique métier)
 │     └─ lib\
-│        ├─ sc_data.lua         GÉNÉRÉ : données + constantes du moteur (ne pas éditer)
-│        ├─ sc_expected.lua     GÉNÉRÉ : résultats Python de 20 scénarios de référence
-│        ├─ sc_predictor.lua    port Lua de predictor.py (algorithme seul, résultats structurés)
-│        ├─ sc_lang.lua         textes d'interface EN / FR / DE / IT / RU / ZH / JA / KO
-│        ├─ sc_detect.lua       détection auto légère (1 Hz, lecture seule)
-│        └─ sc_player.lua       objets possédés + rangs du joueur local (4 Hz, lecture seule)
+│        ├─ sc_data.lua         GÉNÉRÉ : identifiants + données de stratégie (ne pas éditer)
+│        ├─ sc_predictor.lua    port Lua de predictor.py (résultats structurés, sans texte)
+│        ├─ sc_detect.lua       état de la partie par réflexion (lecture seule, 1 Hz)
+│        ├─ sc_player.lua       objets et rangs du joueur local par réflexion (lecture seule, 1 Hz)
+│        ├─ sc_text.lua         noms et descriptions demandés au jeu, dans sa langue
+│        ├─ sc_lang.lua         textes propres au mod, 8 langues
+│        ├─ sc_config.lua       réglages (tempest.config / tempest.save_config, écriture différée)
+│        ├─ sc_keys.lua         raccourcis (tempest.on_key / off_key) et réassignation
+│        ├─ sc_match.lua        entrées (manuel > auto) → prédiction, relancée seulement si elles changent
+│        ├─ sc_fonts.lua        polices Windows via ui.add_font (glyphes CJK limités au texte affiché)
+│        ├─ sc_gui.lua          ImGui protégé (piles rétablies après une erreur), palette, thème
+│        ├─ sc_view.lua         le panneau (compact / détaillé) et les textes tirés d'un résultat
+│        └─ sc_menu.lua         le menu (Partie, Paramètres, Aide) et le tutoriel
 ├─ engine\                      ← moteur Python (source de vérité, non empaqueté)
-│  ├─ extract_loc.py            noms natifs 8.1 (objets, compétences, catégories, rôles) → loc_8_1.json
-│  ├─ loc_8_1.json              GÉNÉRÉ : textes du jeu et rapport de mappage
-│  ├─ build_champions_data.py   génère champions_data.json (tables à éditer ici)
-│  ├─ champions_data.json       59 champions (+ pawn_class, bot_id, compétences) et les 20 objets de la boutique
-│  ├─ predictor.py              compo, build de 4 objets + 1 en option, styles, synergies, menaces, contre-picks, modes
-│  ├─ export_lua.py             écrit sc_data.lua et sc_expected.lua
+│  ├─ extract_ids.py            identifiants de message + effets des compétences → game_ids_8_1.json
+│  ├─ game_ids_8_1.json         GÉNÉRÉ : identifiants seulement (aucun texte)
+│  ├─ build_champions_data.py   tables de stratégie → champions_data.json (à éditer ici)
+│  ├─ champions_data.json       GÉNÉRÉ : 59 champions et 20 objets
+│  ├─ predictor.py              compo, build 4 + 1 en option, styles, synergies, menaces, contre-picks, modes
+│  ├─ export_lua.py             écrit src\scripts\lib\sc_data.lua et tests\expected.lua
+│  ├─ test_predictor.py         79 vérifications du moteur Python
+│  ├─ check_lua.py              contrôles statiques du Lua (structure, 8 langues, clés, rien d'obsolète)
 │  ├─ make_logo.py              dessine src\icon.png (Pillow)
-│  ├─ make_icons.ps1            exporte et réduit les icônes de la boutique (GameUI_SF.upk)
-│  ├─ test_predictor.py         71 vérifications
-│  └─ check_lua.py              contrôles hors jeu du Lua (structure, 8 langues, glyphes, icônes, jargon, anglais restant)
+│  └─ tests\
+│     ├─ expected.lua           GÉNÉRÉ : résultats Python de 20 scénarios de référence
+│     ├─ lua_tests.lua          tests Lua hors jeu (parité, modules, main.lua de bout en bout)
+│     └─ run_lua_tests.ps1      les lance avec le Lua51.dll du jeu (32 bits)
 ├─ dist\                        ← paquets générés (ignorés par git, joints aux GitHub Releases)
-├─ .gitignore / .gitattributes  ← jamais de clé, de jeton, de paquet ni de cache dans git
-├─ README.md                    ← présentation GitHub (joueurs)
-├─ CHANGELOG.md                 ← notes de build, version par version
-├─ RELEASE.md                   ← publication Tempest + routine GitHub
-└─ DEVELOPPEMENT.md             ← ce fichier
+├─ README.md · CHANGELOG.md · RELEASE.md · DEVELOPPEMENT.md
+└─ release-notes.ps1            extrait la section d'une version de CHANGELOG.md
 ```
-
-## Boutique 8.1 et recommandations (0.5)
-- **La boutique compte 20 objets, 4 catégories × 5.** Ce sont les noms natifs du client, relevés dans les données du jeu. Il n'y a ni Cauterize, ni Illuminate, ni Kill to Heal.
-
-| Catégorie | Objets (FR · EN · DE) |
-|---|---|
-| Défense | Résilience · Resilience · Ohne Grenzen ; Sentinelle · Sentinel · Wachposten ; Blindage · Guardian · Wächter ; Bouclier choc · Blast Shields · Sprengschilde ; Havre · Haven · Refugium |
-| Utilitaire | Agile · Nimble · Flinkheit ; Amassage · Hoard · Horten ; Cavalier · Cavalier · Kavalier ; Motivation · Morale Boost · Moralschub ; Chronos |
-| PV rendus | Méditation · Meditation ; Arrache-vie · Life Rip · Lebensriss ; Revivifier · Rejuvenate · Verjüngung ; Vétéran · Veteran ; Bain de sang · Bloodbath · Blutbad |
-| Arme | Bulldozer ; Mains agiles · Deft Hands · Flinke Hände ; Élan funeste · Lethality · Tödlichkeit ; Frénésie · Trigger Scent · Mündungsfeuer ; Broyeur · Wrecker · Zerstörer |
-
-- **0.6 : 4 objets principaux + 1 en option.** Les objets achetés gardent leur place parmi les 4 principaux (`CORE_SLOTS`). Le 5e est toujours en option : fond bleu, contour pointillé, étiquette « option », sans numéro d'ordre.
-- **Toujours 5 objets, triés par priorité.** Plusieurs objets d'une même catégorie sont permis. Chaque objet supplémentaire dans une catégorie voit son score de contre multiplié par 0,7 (`CATEGORY_DECAY`), pour éviter d'empiler les défenses.
-- **Principal ou facultatif :**
-  - un objet est principal si son score atteint 40 % du meilleur, ou 8 points (`PRIMARY_SHARE`, `PRIMARY_MIN`) ;
-  - un objet clé du style est toujours principal (valeur de style ≥ 6, par exemple Revivifier pour un soigneur) ;
-  - les autres emplacements sont **facultatifs** : affichés en bleu, avec la mention « opt. » et le niveau I.
-- **Adaptation aux achats :**
-  - un objet acheté garde toujours sa place ; s'il n'est pas recommandé, il est marqué **hors méta** ;
-  - les emplacements libres sont recalculés : score de contre + **synergie** avec les objets possédés (`SYNERGY`, × rang possédé × 2) ;
-  - exemple : Lian contre Makoa / Fernando / Grohk / Evie / Strix qui achète Arrache-vie III voit arriver **Mains agiles** (« synergie avec Arrache-vie »).
-- **Ordre d'achat :** le prochain achat est encadré en or ; c'est le premier objet principal encore à acheter ou à monter.
-- **Couleurs des pastilles :**
-  - gris : pas acheté ;
-  - ambre : rang en cours (rang possédé inférieur au rang conseillé) ;
-  - vert : rang conseillé atteint ;
-  - fond bleu : facultatif.
-- **Icônes :** l'art de la boutique du jeu (`GameUI_SF.upk`, sprite `ItemCards`), affiché devant chaque pastille. Au survol, l'infobulle donne le nom et la description du jeu (souris disponible menu ouvert).
-
-## Menaces liées aux compétences (0.5)
-- `extract_loc.py` lit les 5 compétences de chaque champion :
-  - source : `DATA_SET_BOTS.DATA_SET_BOT_DEVICES` → `DATA_SET_DEVICES` ;
-  - emplacements : arme, 3 capacités, ultime ;
-  - pour chacune : son nom EN/FR/DE et ses effets, mis en évidence par le jeu dans la description (`<font>Stun</font>`…) ou cités en clair (bouclier, soin, furtivité, mobilité, déployable).
-- Une menace affiche la compétence du champion au lieu d'un mot générique (`TAG_FX`, `TAG_SLOT`). Par exemple :
-  - « Makoa : Ancre de drague (étourdit) » ;
-  - « Grohk : Totem de guérison (soigne, déployable) » ;
-  - « Lian : dégâts explosifs (*ultime*) ».
-- Sur 295 compétences, 149 ont un effet reconnu.
-
-## Langues (0.5, 8 langues en 0.6)
-- **0.6 : EN, FR, DE, IT, RU, ZH, JA, KO.**
-  - Les noms du jeu viennent de `Lang_RUS`, `Lang_CHN`, `Lang_JPN` et `Lang_KOR`. En ZH et KO, environ 120 textes récents manquent au client et restent en anglais.
-  - Il n'y a pas de table italienne dans le client 8.1 : en IT, les noms du jeu sont en anglais.
-  - Polices CJK Windows fusionnées, limitées aux glyphes utilisés.
-- **Langue Auto :**
-  - source principale : la langue du client Steam (`steamapps\appmanifest_444090.acf`, `"language" "french"`) ;
-  - repli : `Language=` de `ChaosEngine.ini`, qui vaut `INT` même sur un client français (cause du blocage en anglais de la 0.4).
-- **Aucune langue mélangée :**
-  - plus de « overlay », « build », « burst », « hitscan », « poke », « dive »… dans les textes FR/DE ;
-  - `check_lua.py` refuse ces mots ;
-  - les noms d'objets, de catégories, de rôles et de compétences viennent du jeu.
-- **Erreurs traduites à l'affichage :** un changement de langue s'applique tout de suite. « Choisis ton champion » n'apparaît plus deux fois.
-
-## Noms natifs et objets possédés (0.4, complété en 0.5)
-- **Noms du jeu, jamais traduits à la main.** `extract_loc.py` lit les exports `upk mcts export` de `assembly.dat` et de `Lang_<LOC>.dat`, rangés dans `Work\Extracted\8.1.5839.0\`. Dernier rapport : 0 non mappé, 0 repli sur l'anglais.
-- **Objets possédés :** `sc_player.lua` lit l'inventaire du pion, ou des listes candidates. Il reconnaît un objet :
-  - par son `ITEM_ID` ou l'un de ses **alias** (plusieurs objets existent deux fois dans `assembly.dat`, par exemple Résilience 11683 / 29446) ;
-  - ou par sa classe d'inventaire.
-  - Lecture toutes les 0,25 s, pour qu'une montée de rang (Bulldozer I → II) s'affiche aussitôt.
-  - Les noms de champs restent des hypothèses : `smartcounter_probe` les liste en jeu, et `smartcounter_dumpsdk` écrit la liste des classes du jeu pour les vérifier.
-  - Sinon, repli manuel dans l'onglet Partie : grille 4 × 5, un rang de 0 à III par objet.
 
 ## Architecture
 ```
-champions_data.json ─┐
-predictor.py ────────┼─ export_lua.py ─→ sc_data.lua (données + constantes)
-                     └────────────────→ sc_expected.lua (résultats attendus)
-                                             │
- sc_detect.lua ── état (moi, alliés, ennemis, carte, mode, phase) ──┐
- sc_player.lua ── objets possédés + rangs ─────────────────────────────┤
- réglages manuels (onglet Partie) ── prioritaires, l'auto complète ────┼─→ sc_predictor.lua ─→ panneau / menu
-                                                                     │   (relancé seulement si les entrées changent)
+ extract_ids.py ─→ game_ids_8_1.json ─┐
+ build_champions_data.py ─────────────┼─→ champions_data.json ─→ export_lua.py ─→ sc_data.lua
+ predictor.py (source de vérité) ─────┘                                       └─→ tests\expected.lua
+
+ sc_detect ── qui joue quoi, phase, mode ───┐
+ sc_player ── objets et rangs ──────────────┼─→ sc_match ─→ sc_predictor ─→ résultat structuré
+ onglet Partie ── choix manuels (prioritaires)┘                               │
+                                                                              ▼
+ sc_text (noms du jeu) + sc_lang (textes du mod) ───────────→ sc_view (panneau) / sc_menu (menu)
 ```
-- **Une seule source de vérité : Python.** Le Lua ne contient que l'algorithme. Les tables (archétypes, facteurs, synergies, contre-picks, tiers) viennent de `sc_data.lua`. Après toute modification de `predictor.py` ou des données, relancer `export_lua.py`. Si l'algorithme lui-même change, porter le changement dans `sc_predictor.lua`.
-- **Parité vérifiée en jeu** par `smartcounter_selftest`, qui compare 20 scénarios à `sc_expected.lua` :
-  - éléments comparés : build, type d'emplacement (principal, facultatif, hors méta), statut, menace n°1 et ses compétences ;
-  - tolérances : ±1 % sur les probabilités, ±0,15 sur les scores d'objets.
+- **Une seule source de vérité : Python.** Le Lua ne contient que l'algorithme ; les tables viennent de `sc_data.lua`. Après toute modification de `predictor.py` ou des données, relancer `export_lua.py`. Si l'algorithme change, porter le changement dans `sc_predictor.lua` : `run_lua_tests.ps1` vérifie la parité sur les 20 scénarios.
+- **Résultats sans texte.** Le prédicteur rend des clés (`reason.key`, `arch.key`, tags, compétences avec `name_msg`). Le texte est composé au dessin : noms du jeu par `sc_text`, phrases du mod par `sc_lang`. Un changement de langue s'applique donc à l'image suivante.
+- **`main.lua`** construit le contexte `A` (modules, réglages, état menu / panneau), branche les touches et dessine : `TX:refresh` → langue → polices → astuce → lecture du jeu (seulement si quelque chose est affiché) → `MATCH:update` → panneau / menu → sauvegarde différée.
+- **API Tempest utilisées :** `tempest.config`, `save_config`, `on_key`, `off_key`, `command`, `local_player`, `queue`, `toast`, `log`, `shared` ; `ui.on_draw`, `ui.add_font` (via `tempest.queue`, utilisable à l'image suivante), `ui.capture` (souris seulement menu ouvert), widgets ImGui, listes de dessin `ui.dl` / `ui.fg`. Lecture du jeu par réflexion uniquement (`obj.Champ`, `obj:Fonction()`, `:is_a`, vues `Array` / `Struct`) : pas de lecture mémoire brute, pas de FFI.
+- **Lecture seule.** Le mod n'appelle aucune fonction qui modifie la partie et n'utilise pas les hooks (`tempest.on` / `before`). Il n'achète rien.
+- **Coût.** Rien n'est lu tant que rien n'est affiché. Détection et objets : une lecture par seconde au plus (`PL:refresh` force une lecture à l'ouverture du menu). Traductions : en cache par identifiant, vidé au changement de langue. Largeur du panneau : en cache (clé = entrées, langue, police, version des textes).
 
-## Fonctionnalités
-### Astuce et tutoriel
-- **Astuce discrète** une fois par lancement du jeu, environ 10 s en haut de l'écran. Elle se désactive dans Paramètres.
-- **Mini-tutoriel** de 4 étapes à la première ouverture du menu. Il ne bloque rien et se revoit depuis Paramètres.
+## Boutique 8.1 et recommandations
+- **20 objets, 4 catégories × 5** (clés internes, les noms affichés viennent du jeu) :
 
-### Touches par défaut, toutes sur un clavier 60 %, sans pavé numérique
-| Action | Touche |
+| Catégorie | Objets |
 |---|---|
-| Ouvrir ou fermer le menu | `Ctrl+J` |
-| Afficher ou masquer le panneau | `Ctrl+H` |
-| Ouvrir les paramètres | `Ctrl+O` |
-| Verrouiller ou déverrouiller le panneau | `Ctrl+L` |
-| Basculer compact / détaillé (0.5) | `Ctrl+K` |
+| Defense | Resilience, Sentinel, Guardian, Blast Shields, Haven |
+| Utility | Nimble, Hoard, Cavalier, Morale Boost, Chronos |
+| Healing | Meditation, Life Rip, Rejuvenate, Veteran, Bloodbath |
+| Weapon | Bulldozer, Deft Hands, Lethality, Trigger Scent, Wrecker |
 
-- Les touches se réassignent dans Paramètres → Touches. Un modificateur est obligatoire, sauf pour F1–F12. Une combinaison déjà prise est refusée.
+- **4 objets principaux + 1 en option.** Les objets achetés gardent leur place parmi les 4 principaux (`CORE_SLOTS`). Le 5e est toujours en option : fond bleu, contour pointillé, étiquette « option ».
+- **Plusieurs objets d'une même catégorie sont permis.** Chaque objet supplémentaire d'une catégorie voit son score multiplié par 0,7 (`CATEGORY_DECAY`).
+- **Principal ou facultatif :** principal si le score atteint 40 % du meilleur ou 8 points (`PRIMARY_SHARE`, `PRIMARY_MIN`), ou si c'est un objet clé du style (valeur de style ≥ 6).
+- **Adaptation aux achats :** un objet acheté garde sa place (marqué **hors méta** s'il n'est pas recommandé) ; les emplacements libres sont recalculés avec la **synergie** (`SYNERGY`, × rang possédé × 2).
+- **Ordre d'achat :** le prochain achat est encadré en or.
+- **Pastilles :** gris = pas acheté, ambre = rang en cours, vert = rang conseillé atteint, fond bleu = option ; marque de couleur à gauche = catégorie (bleu Défense, violet Utilitaire, vert Soins, orange Arme).
 
-### Affichage
-- **Compact :** les 5 pastilles avec icône et barre de rang, la menace principale avec sa compétence, et les contres hors match.
-- **Détaillé :**
-  - le badge de contexte ;
-  - les 5 objets avec catégorie, statut, mentions facultatif / hors méta / synergie ;
-  - la raison du prochain achat seulement ;
-  - 2 menaces ;
-  - les contres hors match.
-- **Auto (par défaut) :** détaillé hors match ; en match, détaillé 8 s après chaque changement, puis compact. `Ctrl+K` force l'un ou l'autre.
-- **Taille du panneau :**
-  - la largeur est mesurée sur le texte de la langue active et les icônes, avec des bornes selon l'écran ;
-  - la hauteur s'ajuste au contenu ;
-  - les pastilles ne passent à la ligne qu'entre deux pastilles.
-- **Polices :**
-  - Segoe UI, chargée une fois l'interface prête, hors du dessin (`tempest.queue`) ;
-  - sinon, police intégrée du jeu à la bonne taille ;
-  - sinon, mise à l'échelle de la police par défaut (`igSetWindowFontScale`), pour que la taille du texte fonctionne toujours.
+## Menaces liées aux compétences
+- `extract_ids.py` relève les 5 compétences de chaque champion (`DATA_SET_BOTS.DATA_SET_BOT_DEVICES` → `DATA_SET_DEVICES`) : emplacement, `device_id`, identifiant de message du nom, et un effet (`fx` : étourdit, attire, bouclier, soin…) déduit hors jeu de la description anglaise. Seuls les identifiants et l'effet sont gardés.
+- Une menace affiche la compétence du champion au lieu d'un mot générique (`TAG_FX`) : « Makoa : Ancre de drague (étourdit) ». Sans nom du jeu, le mot générique du mod est utilisé.
+- 295 compétences, 0 non mappée.
 
-### Détection automatique et repli manuel
-| Donnée | Source | Statut |
-|---|---|---|
-| Mon champion | classe du pawn local (`TgPawn_Princess` → Lian), sinon mon pick en sélection | table pawn vérifiée dans les données 8.1 ; lecture à confirmer en jeu |
-| Alliés en sélection | `myHUD.m_pMovie.m_UIDataManager.m_Match.MatchMembers[i].m_CurrentAllyCustomizeState.nBotId` | chemin utilisé par le mod *while-you-wait* |
-| Ennemis en match | `WorldInfo.GRI.PRIArray` → `r_PawnOwner` (classe du pawn) | un ennemi apparaît une fois son pawn répliqué |
-| Carte / mode | préfixe du chemin de `WorldInfo`, règles `MODE_RULES` | **heuristique** |
-| Phase | `GRI.ElapsedTime` : moins de 240 s early, moins de 540 s mid, sinon late | à confirmer |
-| Objets / rangs | `Pawn.InvManager.InventoryChain`, sinon listes du PRI ou du pawn | **noms de champs non vérifiés** (voir plus bas) |
+## Langues
+- **Interface du mod : EN, FR, DE, IT, RU, ZH, JA, KO** (`sc_lang.lua`, mêmes clés partout, contrôlé par `check_lua.py`).
+- **Auto** suit la langue du jeu (`GetLanguage()`), relue chaque seconde. Les anciennes lectures de `appmanifest_444090.acf` (Steam) et de `ChaosEngine.ini` sont supprimées.
+- **Noms du jeu** seulement quand le jeu tourne dans la langue affichée par le mod (ou réglage `game_names`, qui ne touche que les noms : rôles, catégories, effets et descriptions suivent toujours la langue du mod). Sinon, noms internes anglais. Tant que le HUD n'existe pas (premières secondes), les noms internes anglais s'affichent.
+- **Aucun nom du jeu écrit dans `sc_lang.lua`** : les phrases qui citent un objet ou un champion (archétypes, bouclier spécial, note du Broyeur) ont des `%s` remplis par `sc_view` avec les noms de `sc_text`. La raison « déployables » donne les PV du plus gros déployable, pas les noms des objets. `check_lua.py` refuse tout nom de champion ou d'objet tapé dans les textes.
+- **Polices :** Segoe UI (Latin, Grec, Cyrillique), plus une police CJK Windows fusionnée quand l'interface **ou** les noms du jeu sont en chinois, japonais ou coréen. Seuls les glyphes affichés sont ajoutés (textes du mod + noms rendus par le jeu) ; le jeu de polices est reconstruit une fois quand les noms du jeu arrivent après le chargement.
 
-## À faire en jeu (première session)
-1. Installer le paquet (voir plus bas), lancer l'instance 8.1. Dans `%TEMP%\tempest-scripting.log`, vérifier `[smartcounter] loaded v0.6.2 … lang … (game fr via steam:french)` et la ligne `fonts (…)`.
-2. Dans la console : `smartcounter_selftest`. Résultat attendu : **20/20 OK**.
-3. En partie, après avoir acheté un objet puis monté son rang : `smartcounter_probe`, et me renvoyer les lignes `[smartcounter] probe …`. Elles disent quel champ porte l'identifiant et le rang de l'objet.
-4. Si la lecture des objets échoue : `smartcounter_dumpsdk`, puis m'indiquer le dossier `types\sdk` du mod pour que je cherche les vrais champs d'inventaire.
-
-## Moteur Python (`engine\`)
+## Tests
 ```powershell
 cd "C:\FiF Project\Mods\Paladins-8.1\Mods\Paladins-SmartCounter-8.1\engine"
-python -I -B -X utf8 extract_loc.py          # noms natifs + compétences (après une mise à jour du jeu)
-python -I -B -X utf8 build_champions_data.py # régénérer le JSON après modification des tables
-python -I -B -X utf8 test_predictor.py       # 69 vérifications, code de sortie 0 = OK
+python -I -B -X utf8 extract_ids.py          # après une mise à jour du jeu seulement (exports dans Work\Extracted)
+python -I -B -X utf8 build_champions_data.py # après une modification des tables
+python -I -B -X utf8 test_predictor.py       # 79 vérifications, code de sortie 0 = OK
 python -I -B -X utf8 export_lua.py           # TOUJOURS après une modification : met à jour le Lua
-python -I -B -X utf8 check_lua.py            # contrôles hors jeu du Lua
-powershell -ExecutionPolicy Bypass -File make_icons.ps1   # icônes (une fois par version du jeu)
+python -I -B -X utf8 check_lua.py            # contrôles statiques, doit finir par « OK »
+powershell -ExecutionPolicy Bypass -File tests\run_lua_tests.ps1   # tests Lua, doit finir par « Lua tests: OK »
 python -I -B -X utf8 predictor.py Lian Fernando Makoa Grohk --phase mid --mode tdm
 ```
+- **`check_lua.py`** : structure des fichiers, mêmes clés dans les 8 langues, glyphes affichables, arguments de format, toutes les clés utilisées par `main.lua` et `lib\*.lua` (y compris les clés dynamiques), pas de jargon anglais dans les traductions, `sc_data.lua` en ASCII pur, et rien d'obsolète (pas de `icons\`, de `sc_expected`, de commandes de débogage, de lecture mémoire brute ni de fichiers Steam / du jeu).
+- **`run_lua_tests.ps1`** lance `tests\lua_tests.lua` avec `Binaries\Win32\Lua51.dll` du jeu (Lua 5.1 ; Tempest Scripting utilise LuaJIT, compatible). `tempest`, `ui` et les objets du jeu sont simulés :
+  - parité Lua / Python sur les 20 scénarios (noms et ordres exacts ; nombres à une unité près du dernier chiffre, car `round()` de Python arrondit les demis au pair) ;
+  - `sc_text`, `sc_player`, `sc_detect` sur des objets qui ont la forme des objets du jeu ;
+  - `main.lua` de bout en bout : sans joueur, sélection des champions (jeu en français), partie (jeu en japonais, objets lus), fin de partie, sans traducteur, les 8 langues de l'interface, les 3 onglets, réassignation d'une touche, sauvegarde différée, rechargement à chaud ;
+  - pastilles : marque de catégorie toujours à l'intérieur, jamais sous le contour (2 px compris) ni sous le texte ; contour doré du prochain achat ; pastille bloquée atténuée ; « n/4 » ; en-tête sans mode inconnu ni phase automatique ; noms selon la langue affichée et le réglage `game_names` ; grille manuelle à 4 objets ;
+  - cas limites : traducteur vide puis tardif, absent, HUD perdu, changement de langue, file de polices jamais exécutée, reconstruction CJK, retour au lobby après une partie, PRI réutilisé d'une carte à l'autre, mort, nouvelle partie, Échap pendant une réassignation, listes triées par nom affiché, réglages invalides ;
+  - à chaque image : piles ImGui équilibrées, aucune erreur de dessin, aucune clé de traduction, code de format ou balise du jeu à l'écran, aucune variable globale créée.
+- DLL ailleurs : `-Dll <chemin>` ou variable `PALADINS_LUA51`. Le rapport complet est dans `%TEMP%\smartcounter_lua_tests.txt`.
+
+## À valider en jeu
+Les tests hors jeu valident la logique sur des objets simulés. Les points suivants dépendent du vrai jeu :
+1. `%TEMP%\tempest-scripting.log` : `[smartcounter] loaded v0.6.4 …` puis `fonts latin (queue): 6/6 loaded …`, sans `draw error`.
+2. **Noms du jeu** (`usc_TranslateMsgId`) : une fois au menu principal, les noms du menu Partie sont dans la langue du jeu. S'ils restent en anglais sur un jeu en français, le traducteur ne répond pas.
+3. **Langue Auto** (`GetLanguage`) : sur un client français, l'interface du mod passe en français.
+4. **Détection** (`GetArchetypeBotId`, `GetTaskForceNumber`) : la ligne d'état de l'onglet Partie affiche « toi : … » en sélection, puis « n ennemi(s) vu(s) » en partie.
+5. **Objets** (`InventoryChain`) — journal `%TEMP%\tempest-scripting.log` : une ligne `status: ...` à chaque changement d'état, `items: live from the game (InvManager)` quand la lecture marche, puis une ligne `items [...]` par achat / amélioration / vente. Bouton **Écrire le détail des objets dans le journal** (menu, onglet Partie) avant puis après un achat : il écrit chaque objet de l'inventaire (classe, id, niveaux d'achat et de l'objet, mode). Sur une carte d'entraînement, les objets sont lus aussi. Puis : après un achat, l'onglet Partie affiche « Lus en direct depuis le jeu (InvManager) » et le rang monte dans la seconde quand on améliore l'objet (I → II → III, comme les pastilles du tableau des scores ; la pastille lit « Broyeur I → III » tant que le rang conseillé n'est pas atteint, jamais « I/II ») et `%TEMP%\tempest-scripting.log` reçoit une ligne `[smartcounter] items [...]: Resilience=2 (dev 2, slot -, buy 1, mode 1)` par changement (rien à chaque seconde, aucun « has no property »). Si `dev` ne bouge pas, noter quel champ suit le rang (`slot`, `mode`) ; le nombre d'objets ne bouge pas et le prochain achat passe à un autre objet une fois le rang conseillé atteint. Un objet de rang I n'affiche ni 0 ni II. Sinon, la grille manuelle s'affiche : relever ce cas. En mourant, les objets doivent rester affichés.
+6. **Après une partie** : de retour au lobby, la ligne d'état doit dire « lobby » et non « sélection des champions » ; à la partie suivante, la sélection est de nouveau reconnue (`dwMatchId` change bien d'une partie à l'autre).
+7. **Polices CJK** : jeu en japonais, les noms des champions s'affichent sans carrés vides une fois le menu principal chargé (reconstruction après l'arrivée des noms).
+8. **Pastilles** : la marque de catégorie ne touche plus le contour doré du prochain achat (ex. Havre III) ; l'objet en option a un contour bleu discret ; avec 4 objets, il est atténué et marqué « emplacements pleins », et l'en-tête des achats dit « objets 4/4 ».
+9. **Langues** : client français, interface du mod en anglais → aucun nom français ; interface en français → noms du jeu. Le réglage « Garder les noms du jeu… » rétablit les noms du jeu.
+10. **Choix rapide** : choisir son champion en 1 à 2 s puis lancer : la ligne d'état passe par « chargement de la partie » avec le champion choisi, jamais par « hors partie » ; en partie, le champion est reconnu avant même l'apparition du personnage.
 
 ### Modes de jeu (estimés, à ajuster)
 | Mode | Effet |
@@ -198,44 +184,36 @@ python -I -B -X utf8 predictor.py Lian Fernando Makoa Grohk --phase mid --mode t
 | Entraînement | aucun |
 
 ### Données : ce qui est vérifié et ce qui est estimé
-- **Vérifié dans les données du jeu 8.1.5839.0** (`assembly.dat` + `Lang_*.dat`) :
-  - champions, rôles, PV de base, classes de pawn et bot IDs ;
-  - les 20 objets : noms, descriptions, valeurs, coûts, icônes ;
-  - compétences et effets.
-- **Estimé, à ajuster à la main** dans `build_champions_data.py` / `predictor.py` :
-  - `meta_tier_8_1` et les tags ;
-  - les poids, les styles, les synergies ;
-  - les facteurs de mode.
+- **Vérifié dans les données du jeu 8.1.5839.0** (`assembly.dat`, `Lang_INT.dat`) : champions, rôles, PV de base, classes de pawn, bot IDs, identifiants des objets et des messages, compétences et leurs effets, coûts et valeurs des objets.
+- **Estimé, à ajuster à la main** dans `build_champions_data.py` / `predictor.py` : `meta_tier_8_1`, les tags, les poids, les styles, les synergies, les facteurs de mode.
 
 ### Règles d'objets de la 8.1 appliquées
 | Objet | Coût/niv. | Effet par niveau (données 8.1) | Règle du moteur |
 |---|---|---|---|
-| Résilience | 200 | -25 % de contrôles et ralentissements | Priorité haute contre `heavy_cc` / `slows` |
-| Broyeur | 300 | +50 % de dégâts aux boucliers | Seulement si `wrecker_effective` ; jamais pour Inara, Azaan ni Atlas |
+| Resilience | 200 | -25 % de contrôles et ralentissements | Priorité haute contre `heavy_cc` / `slows` |
+| Wrecker | 300 | +50 % de dégâts aux boucliers | Seulement si `wrecker_effective` ; jamais pour Inara, Azaan ni Atlas |
 | Bulldozer | 150 | +50 % contre déployables, familiers et illusions | Priorité haute contre `deployables`, pondérée par les PV |
-| Sentinelle | 225 | Bouclier de 200 PV pendant 5 s sur élimination | Bonus contre les cibles de 2200 PV ou moins ; ×0,5 pour un soigneur |
-| Frénésie | 250 | +6 % de dégâts d'arme 5 s après une élimination | Réponse au sustain (tuer vite, plus d'anti-soin en 8.1) ; plus forte en fin de partie |
-| Blindage | 250 | +20 % d'efficacité de tes boucliers | +5 points pour un champion à bouclier |
-| Amassage | 200 | Crédits par élimination et dans le temps | ×1,3 en début, ×0,5 en fin de partie |
-| Havre | 300 | -6 % de dégâts directs | Aussi contre la furtivité (embuscade) |
+| Sentinel | 225 | Bouclier de 200 PV pendant 5 s sur élimination | Bonus contre les cibles de 2200 PV ou moins ; ×0,5 pour un soigneur |
+| Trigger Scent | 250 | +6 % de dégâts d'arme 5 s après une élimination | Réponse au sustain ; plus forte en fin de partie |
+| Guardian | 250 | +20 % d'efficacité de tes boucliers | +5 points pour un champion à bouclier |
+| Hoard | 200 | Crédits par élimination et dans le temps | ×1,3 en début, ×0,5 en fin de partie |
+| Haven | 300 | -6 % de dégâts directs | Aussi contre la furtivité (embuscade) |
 
-## Variables
+## Empaqueter, signer, vérifier, installer
 ```powershell
 $T = "C:\FiF Project\Tools\TempestStudio\1.0.0-alpha.10"
 $M = "C:\FiF Project\Mods\Paladins-8.1\Mods\Paladins-SmartCounter-8.1"
 $G = "D:\SteamLibrary\steamapps\common\Paladins"
+$K = "$env:USERPROFILE\.tempest-keys\machi-konno-v2"
+$P = "$M\dist\Paladins-SmartCounter-8.1-0.6.4.tempest"
+& "$T\tempest-cli.exe" mod fingerprint "$K.pub"          # doit afficher 80AD2C078946FE3019DB48BCE76DD8DAD1490829
+& "$T\tempest-cli.exe" mod pack   "$M\src" $P --key "$K.key"
+& "$T\tempest-cli.exe" mod verify $P --game-path $G
+& "$T\tempest-cli.exe" mod install $G $P --replace --defer   # vérification à blanc
+& "$T\tempest-cli.exe" mod install $G $P --replace           # installation réelle
 ```
-
-## Empaqueter, signer, vérifier, installer
-```powershell
-& "$T\tempest-cli.exe" mod pack   "$M\src" "$M\dist\Paladins-SmartCounter-8.1-0.6.2.tempest" --key "$env:USERPROFILE\.tempest-keys\testmod81.key"
-& "$T\tempest-cli.exe" mod verify "$M\dist\Paladins-SmartCounter-8.1-0.6.2.tempest" --game-path $G
-& "$T\tempest-cli.exe" mod install $G "$M\dist\Paladins-SmartCounter-8.1-0.6.2.tempest" --replace --defer   # vérification à blanc
-& "$T\tempest-cli.exe" mod install $G "$M\dist\Paladins-SmartCounter-8.1-0.6.2.tempest" --replace           # installation réelle
-```
-- Pour une mise à jour : augmenter `version` dans `src\manifest.toml`, réempaqueter, puis réinstaller avec `--replace`.
+- Pour une mise à jour : `version` dans `src\manifest.toml` et `VERSION` dans `main.lua`, section en tête de `CHANGELOG.md`, tests, puis réempaqueter.
 
 ## Prochaines étapes
-1. Valider en jeu avec selftest et probe. Ensuite, corriger les champs d'objets (`ID_FIELDS`, `RANK_FIELDS`, `LIST_FIELDS` dans `sc_player.lua`) et `MODE_RULES` selon les résultats.
-2. Lever les doutes sur trois objets en double dans les données : Revivifier (14633 « soins prodigués » ou 33517 « soins reçus »), Cavalier (33083 ou 11646) et Frénésie (33071 Trigger Scent ou 29461 Frenzy). La lecture live accepte les deux identifiants, mais la description affichée est celle du premier.
-3. Option : tests Lua hors jeu avec `lupa` (`pip install lupa`), pour lancer le selftest sans Paladins.
+1. Valider en jeu les 5 points ci-dessus et corriger selon les résultats (`MODE_RULES` dans `sc_detect.lua` notamment).
+2. Lever les doutes sur trois objets en double dans les données : Rejuvenate (14633 ou 33517), Cavalier (33083 ou 11646) et Trigger Scent (33071 ou 29461). La lecture accepte les deux identifiants ; le nom et la description affichés viennent du premier.

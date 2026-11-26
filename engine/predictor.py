@@ -144,6 +144,7 @@ TIER_BONUS = {"S+": 0.3, "S": 0.22, "A": 0.14, "B": 0.06, "C": 0.0, "D": -0.06}
 # ---------------------------------------------------------------- shop (8.1) and playstyles
 # The 8.1 shop: 20 items in 4 categories; 0.5: several items of the same category are allowed.
 ITEM_CATEGORIES = ("Defense", "Utility", "Healing", "Weapon")
+MAX_RANK = 3             # shop ranks I-III when the data has no `ranks` (8.1: 3 for every item)
 BUILD_SLOTS = 5          # always 5 recommendations
 CORE_SLOTS = 4           # 0.6: Paladins holds 4 items -> 4 core slots + the 5th is optional (flex)
 PRIMARY_SHARE = 0.4      # score >= 40 % of the best = primary item, otherwise flex (optional)
@@ -215,7 +216,7 @@ TAG_PRIORITY = ("heavy_cc", "shields", "burst", "stealth", "high_mobility", "sus
                 "deployables", "hitscan", "slows", "poke_sustain")
 TAG_DANGER = {"heavy_cc": 2.0, "burst": 1.5, "high_mobility": 1.0, "stealth": 1.0, "shields": 1.0,
               "sustained_heal": 1.0}
-# Which ability effects (extract_loc.FX_*) back a threat tag, best first: the overlay shows the
+# Which ability effects (extract_ids.FX_*) back a threat tag, best first: the overlay shows the
 # champion's own ability ("Ancre de drague : étourdit") instead of a generic word.
 TAG_FX = {
     "heavy_cc": ("stun", "pull", "knockback", "polymorph", "fear", "silence", "banish", "root", "disarm"),
@@ -417,8 +418,12 @@ class Predictor:
         top = ranked[0]["score"] if ranked else 1
         for i, r in enumerate(ranked, 1):
             r["order"] = i if i <= 3 else "4+"
-            r["suggested_level"] = self.level_for(r["score"], top)
+            r["suggested_level"] = min(self.level_for(r["score"], top), self.ranks(r["item"]))
         return ranked
+
+    def ranks(self, item):
+        """Max shop rank of an item (game data: one device mode per rank)."""
+        return int(self.items.get(item, {}).get("ranks") or MAX_RANK)
 
     @staticmethod
     def level_for(score, top):
@@ -484,9 +489,10 @@ class Predictor:
         return {"picks": cands[:top_n], "recommended_roles": roles[:2], "enemy_holes": holes}
 
     # ---------------------------------------------------------------- build (5 slots, live-adapted)
-    @staticmethod
-    def clean_owned(owned):
-        return {k: max(0, min(3, int(v))) for k, v in (owned or {}).items() if v and int(v) > 0}
+    def clean_owned(self, owned):
+        """{item: rank} limited to known items and to each item's max rank."""
+        return {k: min(self.ranks(k), int(v)) for k, v in (owned or {}).items()
+                if v and int(v) > 0 and k in self.items}
 
     def build(self, ranked, owned=None):
         """The 5 items to show, best first (several per category allowed).
@@ -496,7 +502,10 @@ class Predictor:
         counter score plus SYNERGY with what is owned (x owned rank), so buying off-meta re-plans
         the rest. A slot under PRIMARY_SHARE of the best score is `flex` (optional, shown in blue).
         Each slot: item, category, score, suggested_level / target, rank (0 = not bought),
-        status buy | upgrade | done, kind primary | flex, offmeta, synergy, order, next, alt."""
+        status buy | upgrade | done, kind primary | flex, offmeta, blocked, synergy, order, next, alt.
+
+        Paladins holds CORE_SLOTS (4) items: once 4 are owned, an unowned slot cannot be bought
+        without selling one (`blocked`), and the next purchase is never a blocked slot."""
         owned = self.clean_owned(owned)
         by_item = {r["item"]: r for r in ranked}
         top = ranked[0]["score"] if ranked else 1.0
@@ -538,25 +547,28 @@ class Predictor:
         core.sort(key=lambda p: (-p["eff"], p["flex_rank"]))
         chosen = core + [p for p in chosen if p not in core]
         picked = {p["item"] for p in chosen}
+        full = len(owned) >= CORE_SLOTS      # every item slot of the game is taken
         out, nxt = [], None
         for i, p in enumerate(chosen, 1):
             rank = owned.get(p["item"], 0)
             primary = i <= len(core)
-            target = self.level_for(p["eff"], top) if primary else 1
+            target = min(self.level_for(p["eff"], top), self.ranks(p["item"])) if primary else 1
             if rank and not primary:
                 target = rank                 # off-meta and owned: no further upgrade advised
             b = {"item": p["item"], "category": p["category"], "score": p["eff"],
                  "suggested_level": target, "target": target, "rank": rank, "order": i,
                  "kind": "primary" if primary else "flex",
                  "offmeta": bool(rank) and p["base"] < floor,
+                 "blocked": full and rank == 0,
                  "synergy": p["synergy"],
                  "status": "buy" if rank == 0 else ("done" if rank >= target else "upgrade"),
                  "alt": next((q["item"] for q in pool if q["category"] == p["category"]
                               and q["item"] not in picked and q["score"] > 0), None)}
             out.append(b)
-        # next purchase: the first primary to buy / upgrade, else the first flex
+        # next purchase: the first primary to buy / upgrade, else the first flex (never a blocked slot)
         for want in ("primary", "flex"):
-            nxt = next((b["order"] for b in out if b["kind"] == want and b["status"] != "done"), None)
+            nxt = next((b["order"] for b in out if b["kind"] == want and b["status"] != "done"
+                        and not b["blocked"]), None)
             if nxt:
                 break
         for b in out:

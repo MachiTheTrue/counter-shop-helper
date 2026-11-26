@@ -6,9 +6,13 @@ Checks:
   - sc_lang.lua: same keys in the 8 UI languages (0.6: EN FR DE IT RU ZH JA KO); EN / FR / DE / IT
     Latin-1 only, RU Latin-1 + Cyrillic, ZH / JA / KO + CJK (main.lua loads a font set per script);
     no English sentence left untranslated, no English gaming jargon in FR / DE / IT
-  - every translation key used by main.lua exists, including the dynamic ones built from the engine
-    data (tags, reasons, archetypes, counters, styles, roles, categories, modes, errors...)
+  - every translation key used by main.lua and lib/*.lua exists, including the dynamic ones built
+    from the engine data (tags, reasons, archetypes, counters, styles, roles, categories, modes...)
   - format arguments: same number of %s/%d in every language
+  - sc_data.lua is pure ASCII: no game text is copied into the mod (names come from the game)
+  - no champion or item name typed in sc_lang.lua: sentences use %s filled with the game's names
+  - nothing obsolete is shipped or called: no icons/, no sc_expected, no debug / dump / raw-memory
+    helpers, no reading of Steam or game config files
 Exit code 0 = OK.
 """
 import os
@@ -132,8 +136,11 @@ for lang, keys in tables.items():
                 err(f"[{lang}] {k} : '%' isolé dans un texte formaté (doubler en %%)")
 
 # ------------------------------------------------------------------ keys used by the code
-main_src = open(os.path.join(SRC, "main.lua"), encoding="utf-8").read()
-used = set(re.findall(r'\bt\("(\w+)"', main_src)) | set(re.findall(r'L\.maybe\("(\w+)"', main_src))
+# every Lua file that shows text (sc_lang.lua defines the strings, sc_data.lua has none)
+UI_FILES = ["main.lua"] + [os.path.join("lib", f) for f in sorted(os.listdir(os.path.join(SRC, "lib")))
+                           if f.endswith(".lua") and f not in ("sc_lang.lua", "sc_data.lua")]
+code_src = "\n".join(open(os.path.join(SRC, f), encoding="utf-8").read() for f in UI_FILES)
+used = set(re.findall(r'\bt\("(\w+)"', code_src)) | set(re.findall(r'L\.maybe\("(\w+)"', code_src))
 used = {k for k in used if not k.endswith("_")}   # "act_" .. a : prefixes, covered by `dynamic`
 used.discard("tut")  # "tut" .. step is dynamic; "tut" itself is a real key, re-added below
 used.add("tut")
@@ -147,15 +154,15 @@ dynamic |= {"style_" + k for k in P.STYLES}
 dynamic |= {"role_" + r for r in P.ROLE_ITEM_FACTOR}
 dynamic |= {"cat_" + c for c in P.ITEM_CATEGORIES} | {"cat_Other"}
 dynamic |= {"phase_" + p for p in P.PHASES}
-dynamic |= {"mode_" + m for m in P.MODES} | {"mode_unknown"}
-dynamic |= {"st_" + s for s in ("match", "champ_select", "lobby", "no_player", "idle")}
+dynamic |= {"mode_" + m for m in P.MODES}
+dynamic |= {"st_" + s for s in ("match", "champ_select", "lobby", "no_player", "idle", "match_over", "loading")}
 dynamic |= {"err_" + e for e in ("bad_phase", "bad_mode", "bad_count", "unknown_champion", "duplicate")}
 dynamic |= {"act_" + a for a in ("menu", "overlay", "settings", "lock", "layout")}
 dynamic |= {"fx_" + fx for v in P.TAG_FX.values() for fx in v}
 dynamic |= {"disp_" + d for d in ("auto", "compact", "detailed")}
 dynamic |= {f"tut{i}" for i in range(1, 5)} | {f"tut{i}_t" for i in range(1, 5)}
 dynamic |= {"tab_match", "tab_settings", "tab_help"}
-dynamic |= {"badge_" + c for c in ("draft", "match", "plan")}
+dynamic |= {"badge_" + c for c in ("draft", "match", "plan", "loading")}
 for k in sorted(used | dynamic):
     if k not in en:
         err(f"clé de traduction absente : {k}")
@@ -163,24 +170,43 @@ for item in P.Predictor(data).items:
     pass  # item notes are optional (L.maybe)
 
 # ------------------------------------------------------------------ Latin-1 in displayed Lua sources
-for f in ("main.lua", os.path.join("lib", "sc_predictor.lua"), os.path.join("lib", "sc_detect.lua"),
-          os.path.join("lib", "sc_player.lua")):
+for f in UI_FILES:
     for ln, line in enumerate(open(os.path.join(SRC, f), encoding="utf-8"), 1):
         code = line.split("--", 1)[0]
         bad = [c for c in code if ord(c) > 0xFF]
         if bad:
             err(f"{f}:{ln}: caractères hors Latin-1 dans du code affiché {bad}")
 
-# ------------------------------------------------------------------ game texts shown by the UI (sc_data.lua)
+# ------------------------------------------------------------------ nothing copied from the game, nothing obsolete
 data_src = open(os.path.join(SRC, "lib", "sc_data.lua"), encoding="utf-8").read()
-bad = sorted({c for c in data_src if not drawable(c, True)})
+bad = sorted({ch for ch in data_src if ord(ch) > 0x7F})
 if bad:
-    err(f"sc_data.lua : caractères non affichables (noms du jeu) {bad[:10]}")
-# icons referenced by the data exist in src/icons
-for name, it in data["items"].items():
-    p = os.path.join(SRC, "..", "icons", "".join(ch for ch in name if ch.isalnum()) + ".png")
-    if not os.path.isfile(p):
-        err(f"icône absente : {os.path.normpath(p)}")
+    err(f"sc_data.lua : caractères non ASCII (texte du jeu copié ?) {bad[:10]}")
+# no champion or item name typed in the mod's sentences: they are %s filled with the game's names
+# (sc_text.lua), otherwise a French panel would show "Wrecker" next to the shop's "Broyeur"
+game_names = [c["name"] for c in data["champions"]] + list(data["items"])
+for lang, keys in tables.items():
+    for k, v in keys.items():
+        for n in game_names:
+            if re.search(r"(?<![\w])" + re.escape(n) + r"(?![\w])", v):
+                err(f"[{lang}] {k} : nom du jeu écrit en dur ({n}) au lieu d'un %s")
+if os.path.exists(os.path.join(SRC, "..", "icons")):
+    err("src/icons existe encore : les icônes du jeu ne sont plus livrées")
+for f in os.listdir(os.path.join(SRC, "..")):
+    if f.lower().endswith(".png") and f != "icon.png":
+        err(f"image livrée inattendue : src/{f}")
+if os.path.exists(os.path.join(SRC, "lib", "sc_expected.lua")):
+    err("lib/sc_expected.lua existe encore (les références sont dans engine/tests)")
+FORBIDDEN = {
+    r"\bdump_sdk\b": "dump du SDK", r"\bmemory\.": "lecture mémoire brute", r"\bui\.C\b": "FFI ImGui brut",
+    r"\bgame_dir\b": "lecture de fichiers du jeu", r"appmanifest|ChaosEngine\.ini": "lecture de la config Steam / du jeu",
+    r"smartcounter_(probe|selftest|items|dumpsdk)": "commande de débogage", r"icons[/\\]": "icône du jeu",
+}
+for f in UI_FILES:
+    text = open(os.path.join(SRC, f), encoding="utf-8").read()
+    for pat, what in FORBIDDEN.items():
+        for m in re.finditer(pat, text):
+            err(f"{f}:{text.count(chr(10), 0, m.start()) + 1}: {what} ({m.group(0)})")
 # English-only jargon must not leak into FR / DE strings (0.5: zero mixed languages)
 # The mod's display name is a proper name: kept as is in every language, never counted as English.
 BRAND = "Counter & Shop Helper"

@@ -71,8 +71,14 @@ def main():
           all(len(c.get("abilities", [])) == 5 for c in data["champions"]),
           str([c["name"] for c in data["champions"] if len(c.get("abilities", [])) != 5]))
     mk = {a["slot"]: a for a in by["Makoa"]["abilities"]}
-    check("Makoa : Ancre de drague = étourdit (données du jeu)",
-          "stun" in mk["a3"]["fx"] and mk["a3"]["name"]["fr"] == "Ancre de drague", str(mk.get("a3")))
+    check("Makoa : Dredge Anchor (a3) = étourdit, nom par identifiant de message (données du jeu)",
+          "stun" in mk["a3"]["fx"] and isinstance(mk["a3"].get("name_msg_id"), int) and mk["a3"].get("device_id"),
+          str(mk.get("a3")))
+    check("aucun texte du jeu copié dans les données (identifiants seulement)",
+          all("name" not in a for c in data["champions"] for a in c.get("abilities", []))
+          and all("loc_name" not in x for x in list(data["champions"]) + list(data["items"].values())))
+    check("champions : identifiant de message du nom partout",
+          all(isinstance(c.get("name_msg_id"), int) for c in data["champions"]))
 
     p = Predictor(data)
 
@@ -168,8 +174,12 @@ def main():
     check("boutique 4x5 (4 catégories de 5 objets)",
           sorted(cats) == sorted(ITEM_CATEGORIES) and all(len(v) == 5 for v in cats.values()),
           str({k: len(v) for k, v in cats.items()}))
-    check("objets : icône et identifiant natif partout",
-          all(isinstance(it.get("icon_index"), int) and it.get("game_item_id") for it in data["items"].values()))
+    check("objets : identifiant natif et identifiants de message (nom, description) partout",
+          all(it.get("game_item_id") and isinstance(it.get("name_msg_id"), int) and isinstance(it.get("desc_msg_id"), int)
+              for it in data["items"].values()))
+    check("rôles et catégories : identifiants de message",
+          all(isinstance(v, int) for v in list(data["meta"]["text_ids"]["roles"].values())
+              + list(data["meta"]["text_ids"]["categories"].values())))
     check("raisons structurées (reason_key) partout",
           all(r.get("reason_key") for c in data["champions"] for r in c["recommended_items_against"]))
     foes = ["Makoa", "Dredge", "Evie", "Furia", "Androxus"]
@@ -205,6 +215,28 @@ def main():
           {b["item"] for b in o4["build"][:4]} == {"Hoard", "Nimble", "Chronos", "Wrecker"}
           and o4["build"][4]["kind"] == "flex" and o4["build"][4]["rank"] == 0,
           str([(b["item"], b["kind"]) for b in o4["build"]]))
+    check("4 objets possédés : le 5e (non possédé) est bloqué, jamais 'prochain achat'",
+          o4["build"][4]["blocked"] and not o4["build"][4]["next"]
+          and not any(b["blocked"] for b in o4["build"][:4]),
+          str([(b["item"], b["blocked"], b["next"]) for b in o4["build"]]))
+    o4done = p.predict("Io", ["Makoa", "Dredge", "Evie", "Furia", "Androxus"], "mid", None, "heal",
+                       {"Hoard": 3, "Nimble": 3, "Chronos": 3, "Wrecker": 3})
+    check("4 objets au rang max : aucun prochain achat (rien d'achetable)",
+          not any(b["next"] for b in o4done["build"]),
+          str([(b["item"], b["status"], b["next"]) for b in o4done["build"]]))
+    check("rangs max : 3 pour chacun des 20 objets (modes de l'objet dans les données du jeu)",
+          all(p.ranks(i) == 3 for i in p.items), str({i: p.ranks(i) for i in p.items}))
+    p.items["Nimble"]["ranks"] = 2
+    r2 = p.predict("Lian", ["Makoa", "Fernando"], "mid", None, None, {"Nimble": 3})
+    check("un objet à 2 rangs : rang possédé et rang conseillé plafonnés à 2",
+          all(b["rank"] <= 2 and b["target"] <= 2 for b in r2["build"] if b["item"] == "Nimble")
+          and all(i["suggested_level"] <= 2 for i in r2["items"] if i["item"] == "Nimble")
+          and p.clean_owned({"Nimble": 3})["Nimble"] == 2)
+    p.items["Nimble"]["ranks"] = 3
+    o3 = p.predict("Io", ["Makoa", "Dredge", "Evie", "Furia", "Androxus"], "mid", None, "heal",
+                   {"Hoard": 1, "Nimble": 1, "Chronos": 1})
+    check("3 objets possédés : rien de bloqué (un emplacement libre)",
+          not any(b["blocked"] for b in o3["build"]), str([(b["item"], b["blocked"]) for b in o3["build"]]))
     mk = next(t for t in heal["threats"] if t["name"] == "Makoa")
     check("menace Makoa : CC lié à sa compétence (Ancre de drague, étourdit)",
           any(a["tag"] == "heavy_cc" and a["slot"] == "a3" and a["fx"] == "stun" for a in mk["abilities"]),

@@ -1,7 +1,8 @@
--- SmartCounter 8.1: Lua port of engine/predictor.py.
+-- Counter & Shop Helper: Lua port of engine/predictor.py.
 -- Constants and data come from sc_data.lua (generated from Python): only the algorithm lives here.
--- Any change to predictor.py's logic must be mirrored here; `smartcounter_selftest` checks parity.
--- Explanations are returned as structured keys (no text): the UI translates them (sc_lang.lua).
+-- Any change to predictor.py's logic must be mirrored here; engine/tests/run_lua_tests.ps1 checks
+-- parity offline (engine/tests/expected.lua). Results hold structured keys and game ids, never text:
+-- the UI translates them (sc_lang.lua for its own words, sc_text.lua for the game's names).
 
 local M = {}
 M.__index = M
@@ -34,8 +35,8 @@ function M.new(D)
 		a.index = i
 		self.arch_by_key[a.key] = a
 	end
-	self.mode_label = {}
-	for _, m in ipairs(D.modes) do self.mode_label[m.key] = m.label end
+	self.known_mode = {}
+	for _, m in ipairs(D.modes) do self.known_mode[m.key] = true end
 	return self
 end
 
@@ -97,7 +98,7 @@ function M:forecast(enemies, mode)
 		end)
 		local drivers = {}
 		for _, x in ipairs(contribs) do drivers[#drivers + 1] = x.name end
-		out[#out + 1] = { key = arch.key, label = arch.label, probability = round((1 - miss) * 100),
+		out[#out + 1] = { key = arch.key, probability = round((1 - miss) * 100),
 			drivers = drivers, index = arch.index }
 	end
 	table.sort(out, function(a, b)
@@ -207,7 +208,7 @@ function M:rank_items(player, enemies, forecast, phase, style)
 	local top = ranked[1] and ranked[1].score or 1
 	for i, r in ipairs(ranked) do
 		r.order = i <= 3 and tostring(i) or "4+"
-		r.suggested_level = M.level_for(r.score, top)
+		r.suggested_level = math.min(M.level_for(r.score, top), M.ranks(D, r.item))
 	end
 	return ranked
 end
@@ -216,11 +217,17 @@ function M.level_for(score, top)
 	return (score >= 0.75 * top and 3) or (score >= 0.45 * top and 2) or 1
 end
 
+-- Max shop rank of an item (game data: one device mode per rank; 3 for every 8.1 item).
+function M.ranks(D, item)
+	local it = D.items[item]
+	return (it and tonumber(it.ranks)) or 3
+end
+
 function M.clean_owned(D, owned)
 	local own = {}
 	for k, v in pairs(owned or {}) do
 		local r = math.floor(tonumber(v) or 0)
-		if r > 0 and D.items[k] then own[k] = math.min(3, r) end
+		if r > 0 and D.items[k] then own[k] = math.min(M.ranks(D, k), r) end
 	end
 	return own
 end
@@ -230,7 +237,8 @@ end
 -- go to the best unowned items, counter score (decayed per extra item of a category) + synergy with
 -- what is owned. Under the primary floor = `flex` (optional, blue). Slot fields: item, category,
 -- score, suggested_level / target, rank, status buy|upgrade|done, kind primary|flex, offmeta,
--- synergy (owned items it pairs with), order, next, alt, why.
+-- blocked (not owned while the game's 4 item slots are full), synergy (owned items it pairs with),
+-- order, next (never a blocked slot), alt, why.
 function M:build(ranked, owned)
 	local D = self.D
 	local own = M.clean_owned(D, owned)
@@ -305,7 +313,7 @@ function M:build(ranked, owned)
 		chosen[#chosen + 1] = best
 	end
 	sort_by(chosen, function(p) return p.eff end)
-	-- 0.6: 4 core slots = owned items first, then the best others; the rest is optional (flex)
+	-- core slots (D.core_slots, 4) = owned items first, then the best others; the rest is optional (flex)
 	local core_n, core, in_core = D.core_slots or 4, {}, {}
 	for _, p in ipairs(chosen) do
 		if own[p.item] and #core < core_n then core[#core + 1], in_core[p] = p, true end
@@ -322,11 +330,12 @@ function M:build(ranked, owned)
 	chosen = ordered
 	local picked = {}
 	for _, p in ipairs(chosen) do picked[p.item] = true end
+	local full = n_own >= core_n   -- every item slot of the game is taken
 	local out = {}
 	for i, p in ipairs(chosen) do
 		local rank = own[p.item] or 0
 		local primary = i <= #core
-		local target = primary and M.level_for(p.eff, top) or 1
+		local target = primary and math.min(M.level_for(p.eff, top), M.ranks(D, p.item)) or 1
 		if rank > 0 and not primary then target = rank end
 		local alt
 		for _, q in ipairs(pool) do
@@ -337,13 +346,13 @@ function M:build(ranked, owned)
 		end
 		out[i] = { item = p.item, category = p.category, score = p.eff, suggested_level = target, target = target,
 			rank = rank, order = i, kind = primary and "primary" or "flex", offmeta = rank > 0 and p.base < floor,
-			synergy = p.synergy, alt = alt, why = p.why,
+			blocked = full and rank == 0, synergy = p.synergy, alt = alt, why = p.why,
 			status = rank == 0 and "buy" or (rank >= target and "done" or "upgrade") }
 	end
 	local nxt
 	for _, want in ipairs({ "primary", "flex" }) do
 		for _, b in ipairs(out) do
-			if b.kind == want and b.status ~= "done" then
+			if b.kind == want and b.status ~= "done" and not b.blocked then
 				nxt = b.order
 				break
 			end
@@ -360,14 +369,14 @@ function M:tag_ability(champ, tag)
 	for _, fx in ipairs(self.D.tag_fx[tag] or {}) do
 		for _, a in ipairs(abil) do
 			for _, f in ipairs(a.fx or {}) do
-				if f == fx then return { tag = tag, slot = a.slot, fx = fx, names = a.names } end
+				if f == fx then return { tag = tag, slot = a.slot, fx = fx, name_msg = a.name_msg } end
 			end
 		end
 	end
 	local slot = self.D.tag_slot[tag]
 	if slot then
 		for _, a in ipairs(abil) do
-			if a.slot == slot then return { tag = tag, slot = slot, names = a.names } end
+			if a.slot == slot then return { tag = tag, slot = slot, name_msg = a.name_msg } end
 		end
 	end
 	return nil
@@ -509,7 +518,7 @@ function M:predict(player_name, enemy_names, phase, mode, style, owned)
 	phase = phase or "mid"
 	if D.phase_blend[phase] == nil then return nil, "bad_phase", tostring(phase) end
 	if mode == "" then mode = nil end
-	if mode and not self.mode_label[mode] then return nil, "bad_mode", tostring(mode) end
+	if mode and not self.known_mode[mode] then return nil, "bad_mode", tostring(mode) end
 	if #enemy_names < 1 or #enemy_names > D.max_enemies then return nil, "bad_count" end
 	local player = self:champion(player_name)
 	if not player then return nil, "unknown_champion", tostring(player_name) end
@@ -549,77 +558,6 @@ function M:predict(player_name, enemy_names, phase, mode, style, owned)
 		threats = self:threats(enemies, build),
 		counters = self:counter_picks(player, enemies, fc),
 	}
-end
-
--- In-game parity check against sc_expected.lua (computed by predictor.py).
-function M:selftest(expected)
-	local ok_count, fails = 0, {}
-	for i, s in ipairs(expected) do
-		local r, err, detail = self:predict(s.player, s.enemies, s.phase, s.mode, s.style, s.owned)
-		local problems = {}
-		if not r then
-			problems[#problems + 1] = "error " .. tostring(err) .. " " .. tostring(detail)
-		else
-			if r.forecast[1].key ~= s.top_forecast then
-				problems[#problems + 1] = "forecast #1 " .. r.forecast[1].key .. " instead of " .. s.top_forecast
-			end
-			for _, a in ipairs(r.forecast) do
-				local want = s.probs[a.key]
-				if want and math.abs(a.probability - want) > 1 then
-					problems[#problems + 1] = string.format("%s %d %% instead of %d %%", a.key, a.probability, want)
-				end
-			end
-			for k, want in ipairs(s.items) do
-				local got = r.items[k]
-				if not got then
-					problems[#problems + 1] = "item #" .. k .. " missing"
-				elseif got.item ~= want.item and math.abs(got.score - want.score) > 0.15 then
-					problems[#problems + 1] = string.format("item #%d %s instead of %s", k, got.item, want.item)
-				elseif math.abs(got.score - want.score) > 0.15 then
-					problems[#problems + 1] = string.format("%s score %.1f instead of %.1f", want.item, got.score, want.score)
-				end
-			end
-			local got_build = {}
-			for k, b in ipairs(r.build) do
-				got_build[k] = b.item
-				local wk = s.kinds and s.kinds[k]
-				local gk = b.kind:sub(1, 1) .. (b.offmeta and "o" or "")
-				if wk and wk ~= gk then
-					problems[#problems + 1] = string.format("slot %d %s kind %s instead of %s", k, b.item, gk, wk)
-				end
-				local ws = s.status and s.status[k]
-				if ws and ws ~= b.status .. (b.next and "*" or "") then
-					problems[#problems + 1] = string.format("slot %d %s status %s%s instead of %s", k, b.item, b.status,
-						b.next and "*" or "", ws)
-				end
-			end
-			if table.concat(got_build, ",") ~= table.concat(s.build or {}, ",") then
-				problems[#problems + 1] = "build " .. table.concat(got_build, ",") .. " instead of "
-					.. table.concat(s.build or {}, ",")
-			end
-			if s.threat1 and r.threats[1].name ~= s.threat1 then
-				problems[#problems + 1] = "threat #1 " .. r.threats[1].name .. " instead of " .. s.threat1
-			elseif s.threat1_abil then
-				local got = {}
-				for k, a in ipairs(r.threats[1].abilities) do got[k] = a.tag .. ":" .. a.slot .. ":" .. (a.fx or "") end
-				if table.concat(got, ",") ~= table.concat(s.threat1_abil, ",") then
-					problems[#problems + 1] = "threat #1 abilities " .. table.concat(got, ",") .. " instead of "
-						.. table.concat(s.threat1_abil, ",")
-				end
-			end
-			local p1 = r.counters.picks[1]
-			if p1.name ~= s.top_pick and math.abs(p1.score - s.top_pick_score) > 0.02 then
-				problems[#problems + 1] = "counter-pick #1 " .. p1.name .. " instead of " .. s.top_pick
-			end
-		end
-		if #problems == 0 then
-			ok_count = ok_count + 1
-		else
-			fails[#fails + 1] = string.format("scenario %d (%s vs %s): %s", i, s.player,
-				table.concat(s.enemies, "/"), table.concat(problems, " ; "))
-		end
-	end
-	return ok_count, #expected, fails
 end
 
 return M

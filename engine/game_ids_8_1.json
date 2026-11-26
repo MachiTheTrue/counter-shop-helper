@@ -1,0 +1,2619 @@
+{
+ "meta": {
+  "build": "8.1.5839.0 (Wekono's Wake Hotfix 1)",
+  "source": "CookedPCConsole/assembly.dat + Localization/INT/Lang_INT.dat (upk mcts export)",
+  "generated_by": "extract_ids.py"
+ },
+ "items": {
+  "Resilience": {
+   "item_id": 11683,
+   "name_msg_id": 147832,
+   "desc_msg_id": 147833,
+   "ranks": 3
+  },
+  "Sentinel": {
+   "item_id": 33075,
+   "name_msg_id": 255068,
+   "desc_msg_id": 255069,
+   "ranks": 3
+  },
+  "Guardian": {
+   "item_id": 13228,
+   "name_msg_id": 165138,
+   "desc_msg_id": 165139,
+   "ranks": 3
+  },
+  "Blast Shields": {
+   "item_id": 33618,
+   "name_msg_id": 805538,
+   "desc_msg_id": 805539,
+   "ranks": 3
+  },
+  "Haven": {
+   "item_id": 13229,
+   "name_msg_id": 165140,
+   "desc_msg_id": 165141,
+   "ranks": 3
+  },
+  "Nimble": {
+   "item_id": 11826,
+   "name_msg_id": 150395,
+   "desc_msg_id": 150396,
+   "ranks": 3
+  },
+  "Hoard": {
+   "item_id": 33081,
+   "name_msg_id": 255087,
+   "desc_msg_id": 255088,
+   "ranks": 3
+  },
+  "Cavalier": {
+   "item_id": 33083,
+   "name_msg_id": 255097,
+   "desc_msg_id": 255098,
+   "ranks": 3
+  },
+  "Morale Boost": {
+   "item_id": 13165,
+   "name_msg_id": 164865,
+   "desc_msg_id": 164866,
+   "ranks": 3
+  },
+  "Chronos": {
+   "item_id": 11723,
+   "name_msg_id": 148552,
+   "desc_msg_id": 148553,
+   "ranks": 3
+  },
+  "Meditation": {
+   "item_id": 33082,
+   "name_msg_id": 255092,
+   "desc_msg_id": 255093,
+   "ranks": 3
+  },
+  "Life Rip": {
+   "item_id": 12010,
+   "name_msg_id": 153339,
+   "desc_msg_id": 153340,
+   "ranks": 3
+  },
+  "Rejuvenate": {
+   "item_id": 14633,
+   "name_msg_id": 171396,
+   "desc_msg_id": 171397,
+   "ranks": 3
+  },
+  "Veteran": {
+   "item_id": 13224,
+   "name_msg_id": 165117,
+   "desc_msg_id": 165118,
+   "ranks": 3
+  },
+  "Bloodbath": {
+   "item_id": 33070,
+   "name_msg_id": 255029,
+   "desc_msg_id": 255030,
+   "ranks": 3
+  },
+  "Bulldozer": {
+   "item_id": 13079,
+   "name_msg_id": 164524,
+   "desc_msg_id": 164525,
+   "ranks": 3
+  },
+  "Deft Hands": {
+   "item_id": 13235,
+   "name_msg_id": 165163,
+   "desc_msg_id": 165164,
+   "ranks": 3
+  },
+  "Lethality": {
+   "item_id": 31100,
+   "name_msg_id": 237664,
+   "desc_msg_id": 237665,
+   "ranks": 3
+  },
+  "Trigger Scent": {
+   "item_id": 33071,
+   "name_msg_id": 255031,
+   "desc_msg_id": 255032,
+   "ranks": 3
+  },
+  "Wrecker": {
+   "item_id": 13071,
+   "name_msg_id": 164487,
+   "desc_msg_id": 164488,
+   "ranks": 3
+  }
+ },
+ "champions": {
+  "Androxus": {
+   "bot_id": 2205,
+   "name_msg_id": 144401,
+   "abilities": [
+    {
+     "slot": "weapon",
+     "device_id": 12489,
+     "name_msg_id": 160720,
+     "fx": []
+    },
+    {
+     "slot": "a1",
+     "device_id": 12658,
+     "name_msg_id": 161679,
+     "fx": [
+      "mobility"
+     ]
+    },
+    {
+     "slot": "a2",
+     "device_id": 13251,
+     "name_msg_id": 165240,
+     "fx": []
+    },
+    {
+     "slot": "a3",
+     "device_id": 13324,
+     "name_msg_id": 165529,
+     "fx": []
+    },
+    {
+     "slot": "ult",
+     "device_id": 13254,
+     "name_msg_id": 165256,
+     "fx": [
+      "mobility"
+     ]
+    }
+   ]
+  },
+  "Ash": {
+   "bot_id": 2404,
+   "name_msg_id": 180019,
+   "abilities": [
+    {
+     "slot": "weapon",
+     "device_id": 16708,
+     "name_msg_id": 179228,
+     "fx": []
+    },
+    {
+     "slot": "a1",
+     "device_id": 17087,
+     "name_msg_id": 180469,
+     "fx": [
+      "knockback"
+     ]
+    },
+    {
+     "slot": "a2",
+     "device_id": 18671,
+     "name_msg_id": 183211,
+     "fx": [
+      "shield"
+     ]
+    },
+    {
+     "slot": "a3",
+     "device_id": 17221,
+     "name_msg_id": 180937,
+     "fx": [
+      "knockback"
+     ]
+    },
+    {
+     "slot": "ult",
+     "device_id": 17222,
+     "name_msg_id": 180959,
+     "fx": [
+      "stun",
+      "mobility"
+     ]
+    }
+   ]
+  },
+  "Atlas": {
+   "bot_id": 2512,
+   "name_msg_id": 203592,
+   "abilities": [
+    {
+     "slot": "weapon",
+     "device_id": 24033,
+     "name_msg_id": 203596,
+     "fx": []
+    },
+    {
+     "slot": "a1",
+     "device_id": 24188,
+     "name_msg_id": 204205,
+     "fx": []
+    },
+    {
+     "slot": "a2",
+     "device_id": 24055,
+     "name_msg_id": 203693,
+     "fx": []
+    },
+    {
+     "slot": "a3",
+     "device_id": 24041,
+     "name_msg_id": 203618,
+     "fx": []
+    },
+    {
+     "slot": "ult",
+     "device_id": 24400,
+     "name_msg_id": 205718,
+     "fx": [
+      "banish"
+     ]
+    }
+   ]
+  },
+  "Azaan": {
+   "bot_id": 2548,
+   "name_msg_id": 220854,
+   "abilities": [
+    {
+     "slot": "weapon",
+     "device_id": 27606,
+     "name_msg_id": 220916,
+     "fx": []
+    },
+    {
+     "slot": "a1",
+     "device_id": 27632,
+     "name_msg_id": 221049,
+     "fx": [
+      "stun",
+      "mobility"
+     ]
+    },
+    {
+     "slot": "a2",
+     "device_id": 27634,
+     "name_msg_id": 221063,
+     "fx": [
+      "deploy"
+     ]
+    },
+    {
+     "slot": "a3",
+     "device_id": 27610,
+     "name_msg_id": 220929,
+     "fx": [
+      "pull"
+     ]
+    },
+    {
+     "slot": "ult",
+     "device_id": 27664,
+     "name_msg_id": 221171,
+     "fx": [
+      "knockback",
+      "mobility"
+     ]
+    }
+   ]
+  },
+  "Barik": {
+   "bot_id": 2073,
+   "name_msg_id": 129673,
+   "abilities": [
+    {
+     "slot": "weapon",
+     "device_id": 11197,
+     "name_msg_id": 139691,
+     "fx": []
+    },
+    {
+     "slot": "a1",
+     "device_id": 11496,
+     "name_msg_id": 144531,
+     "fx": []
+    },
+    {
+     "slot": "a2",
+     "device_id": 12523,
+     "name_msg_id": 161032,
+     "fx": [
+      "deploy"
+     ]
+    },
+    {
+     "slot": "a3",
+     "device_id": 10272,
+     "name_msg_id": 126828,
+     "fx": [
+      "shield"
+     ]
+    },
+    {
+     "slot": "ult",
+     "device_id": 13012,
+     "name_msg_id": 164101,
+     "fx": [
+      "burn",
+      "shield",
+      "deploy"
+     ]
+    }
+   ]
+  },
+  "Betty la Bomba": {
+   "bot_id": 2550,
+   "name_msg_id": 223523,
+   "abilities": [
+    {
+     "slot": "weapon",
+     "device_id": 27924,
+     "name_msg_id": 223899,
+     "fx": []
+    },
+    {
+     "slot": "a1",
+     "device_id": 27960,
+     "name_msg_id": 224094,
+     "fx": [
+      "knockback"
+     ]
+    },
+    {
+     "slot": "a2",
+     "device_id": 27927,
+     "name_msg_id": 223905,
+     "fx": [
+      "deploy"
+     ]
+    },
+    {
+     "slot": "a3",
+     "device_id": 27980,
+     "name_msg_id": 224284,
+     "fx": []
+    },
+    {
+     "slot": "ult",
+     "device_id": 27923,
+     "name_msg_id": 223897,
+     "fx": [
+      "knockback",
+      "deploy"
+     ]
+    }
+   ]
+  },
+  "Bomb King": {
+   "bot_id": 2281,
+   "name_msg_id": 165741,
+   "abilities": [
+    {
+     "slot": "weapon",
+     "device_id": 14308,
+     "name_msg_id": 169884,
+     "fx": []
+    },
+    {
+     "slot": "a1",
+     "device_id": 13407,
+     "name_msg_id": 166005,
+     "fx": [
+      "knockback"
+     ]
+    },
+    {
+     "slot": "a2",
+     "device_id": 13412,
+     "name_msg_id": 166022,
+     "fx": [
+      "stun"
+     ]
+    },
+    {
+     "slot": "a3",
+     "device_id": 14309,
+     "name_msg_id": 169893,
+     "fx": []
+    },
+    {
+     "slot": "ult",
+     "device_id": 14050,
+     "name_msg_id": 168883,
+     "fx": [
+      "stun",
+      "knockback"
+     ]
+    }
+   ]
+  },
+  "Buck": {
+   "bot_id": 2147,
+   "name_msg_id": 139291,
+   "abilities": [
+    {
+     "slot": "weapon",
+     "device_id": 12879,
+     "name_msg_id": 163442,
+     "fx": []
+    },
+    {
+     "slot": "a1",
+     "device_id": 11489,
+     "name_msg_id": 144447,
+     "fx": [
+      "mobility"
+     ]
+    },
+    {
+     "slot": "a2",
+     "device_id": 11224,
+     "name_msg_id": 139809,
+     "fx": []
+    },
+    {
+     "slot": "a3",
+     "device_id": 12981,
+     "name_msg_id": 163972,
+     "fx": [
+      "slow"
+     ]
+    },
+    {
+     "slot": "ult",
+     "device_id": 14924,
+     "name_msg_id": 172183,
+     "fx": []
+    }
+   ]
+  },
+  "Caspian": {
+   "bot_id": 2554,
+   "name_msg_id": 236888,
+   "abilities": [
+    {
+     "slot": "weapon",
+     "device_id": 30965,
+     "name_msg_id": 236890,
+     "fx": []
+    },
+    {
+     "slot": "a1",
+     "device_id": 30969,
+     "name_msg_id": 236894,
+     "fx": [
+      "knockback",
+      "mobility"
+     ]
+    },
+    {
+     "slot": "a2",
+     "device_id": 30966,
+     "name_msg_id": 236891,
+     "fx": [
+      "cripple"
+     ]
+    },
+    {
+     "slot": "a3",
+     "device_id": 30968,
+     "name_msg_id": 236893,
+     "fx": []
+    },
+    {
+     "slot": "ult",
+     "device_id": 30967,
+     "name_msg_id": 236892,
+     "fx": [
+      "deploy"
+     ]
+    }
+   ]
+  },
+  "Cassie": {
+   "bot_id": 2092,
+   "name_msg_id": 130168,
+   "abilities": [
+    {
+     "slot": "weapon",
+     "device_id": 10772,
+     "name_msg_id": 131148,
+     "fx": []
+    },
+    {
+     "slot": "a1",
+     "device_id": 10908,
+     "name_msg_id": 137491,
+     "fx": []
+    },
+    {
+     "slot": "a2",
+     "device_id": 11450,
+     "name_msg_id": 144057,
+     "fx": [
+      "knockback"
+     ]
+    },
+    {
+     "slot": "a3",
+     "device_id": 14910,
+     "name_msg_id": 172121,
+     "fx": [
+      "knockback",
+      "slow"
+     ]
+    },
+    {
+     "slot": "ult",
+     "device_id": 12983,
+     "name_msg_id": 163980,
+     "fx": [
+      "reveal"
+     ]
+    }
+   ]
+  },
+  "Corvus": {
+   "bot_id": 2533,
+   "name_msg_id": 210311,
+   "abilities": [
+    {
+     "slot": "weapon",
+     "device_id": 25317,
+     "name_msg_id": 210868,
+     "fx": []
+    },
+    {
+     "slot": "a1",
+     "device_id": 25219,
+     "name_msg_id": 210342,
+     "fx": [
+      "slow",
+      "mobility"
+     ]
+    },
+    {
+     "slot": "a2",
+     "device_id": 25214,
+     "name_msg_id": 210318,
+     "fx": []
+    },
+    {
+     "slot": "a3",
+     "device_id": 25213,
+     "name_msg_id": 210314,
+     "fx": []
+    },
+    {
+     "slot": "ult",
+     "device_id": 25321,
+     "name_msg_id": 210883,
+     "fx": [
+      "slow",
+      "heal",
+      "mobility"
+     ]
+    }
+   ]
+  },
+  "Dredge": {
+   "bot_id": 2495,
+   "name_msg_id": 201380,
+   "abilities": [
+    {
+     "slot": "weapon",
+     "device_id": 23600,
+     "name_msg_id": 201399,
+     "fx": []
+    },
+    {
+     "slot": "a1",
+     "device_id": 23622,
+     "name_msg_id": 201479,
+     "fx": [
+      "mobility"
+     ]
+    },
+    {
+     "slot": "a2",
+     "device_id": 23612,
+     "name_msg_id": 201446,
+     "fx": [
+      "slow"
+     ]
+    },
+    {
+     "slot": "a3",
+     "device_id": 23611,
+     "name_msg_id": 201444,
+     "fx": []
+    },
+    {
+     "slot": "ult",
+     "device_id": 23613,
+     "name_msg_id": 201448,
+     "fx": [
+      "knockback"
+     ]
+    }
+   ]
+  },
+  "Drogoz": {
+   "bot_id": 2277,
+   "name_msg_id": 165535,
+   "abilities": [
+    {
+     "slot": "weapon",
+     "device_id": 13325,
+     "name_msg_id": 165537,
+     "fx": []
+    },
+    {
+     "slot": "a1",
+     "device_id": 13328,
+     "name_msg_id": 165550,
+     "fx": []
+    },
+    {
+     "slot": "a2",
+     "device_id": 14140,
+     "name_msg_id": 169206,
+     "fx": []
+    },
+    {
+     "slot": "a3",
+     "device_id": 13327,
+     "name_msg_id": 165547,
+     "fx": [
+      "weaken"
+     ]
+    },
+    {
+     "slot": "ult",
+     "device_id": 13329,
+     "name_msg_id": 165553,
+     "fx": []
+    }
+   ]
+  },
+  "Evie": {
+   "bot_id": 2094,
+   "name_msg_id": 130179,
+   "abilities": [
+    {
+     "slot": "weapon",
+     "device_id": 10752,
+     "name_msg_id": 131069,
+     "fx": []
+    },
+    {
+     "slot": "a1",
+     "device_id": 12822,
+     "name_msg_id": 163086,
+     "fx": [
+      "mobility"
+     ]
+    },
+    {
+     "slot": "a2",
+     "device_id": 10315,
+     "name_msg_id": 127964,
+     "fx": [
+      "mobility"
+     ]
+    },
+    {
+     "slot": "a3",
+     "device_id": 11414,
+     "name_msg_id": 143521,
+     "fx": []
+    },
+    {
+     "slot": "ult",
+     "device_id": 12928,
+     "name_msg_id": 163709,
+     "fx": [
+      "cripple",
+      "slow",
+      "deploy"
+     ]
+    }
+   ]
+  },
+  "Fernando": {
+   "bot_id": 2071,
+   "name_msg_id": 129609,
+   "abilities": [
+    {
+     "slot": "weapon",
+     "device_id": 10774,
+     "name_msg_id": 131153,
+     "fx": [
+      "burn"
+     ]
+    },
+    {
+     "slot": "a1",
+     "device_id": 10289,
+     "name_msg_id": 127066,
+     "fx": [
+      "mobility"
+     ]
+    },
+    {
+     "slot": "a2",
+     "device_id": 11481,
+     "name_msg_id": 144425,
+     "fx": []
+    },
+    {
+     "slot": "a3",
+     "device_id": 11059,
+     "name_msg_id": 138912,
+     "fx": [
+      "shield"
+     ]
+    },
+    {
+     "slot": "ult",
+     "device_id": 13008,
+     "name_msg_id": 164074,
+     "fx": []
+    }
+   ]
+  },
+  "Furia": {
+   "bot_id": 2491,
+   "name_msg_id": 199708,
+   "abilities": [
+    {
+     "slot": "weapon",
+     "device_id": 23302,
+     "name_msg_id": 199711,
+     "fx": [
+      "heal"
+     ]
+    },
+    {
+     "slot": "a1",
+     "device_id": 23325,
+     "name_msg_id": 199801,
+     "fx": [
+      "mobility"
+     ]
+    },
+    {
+     "slot": "a2",
+     "device_id": 23309,
+     "name_msg_id": 199743,
+     "fx": [
+      "stun",
+      "deploy"
+     ]
+    },
+    {
+     "slot": "a3",
+     "device_id": 23306,
+     "name_msg_id": 199724,
+     "fx": [
+      "heal"
+     ]
+    },
+    {
+     "slot": "ult",
+     "device_id": 23308,
+     "name_msg_id": 199731,
+     "fx": []
+    }
+   ]
+  },
+  "Grohk": {
+   "bot_id": 2093,
+   "name_msg_id": 130175,
+   "abilities": [
+    {
+     "slot": "weapon",
+     "device_id": 10751,
+     "name_msg_id": 131066,
+     "fx": []
+    },
+    {
+     "slot": "a1",
+     "device_id": 12659,
+     "name_msg_id": 161683,
+     "fx": []
+    },
+    {
+     "slot": "a2",
+     "device_id": 12123,
+     "name_msg_id": 155422,
+     "fx": [
+      "heal",
+      "deploy"
+     ]
+    },
+    {
+     "slot": "a3",
+     "device_id": 14475,
+     "name_msg_id": 170745,
+     "fx": [
+      "shock"
+     ]
+    },
+    {
+     "slot": "ult",
+     "device_id": 13009,
+     "name_msg_id": 164084,
+     "fx": [
+      "slow",
+      "mobility"
+     ]
+    }
+   ]
+  },
+  "Grover": {
+   "bot_id": 2254,
+   "name_msg_id": 163634,
+   "abilities": [
+    {
+     "slot": "weapon",
+     "device_id": 13026,
+     "name_msg_id": 164161,
+     "fx": []
+    },
+    {
+     "slot": "a1",
+     "device_id": 13023,
+     "name_msg_id": 164151,
+     "fx": []
+    },
+    {
+     "slot": "a2",
+     "device_id": 14190,
+     "name_msg_id": 169447,
+     "fx": []
+    },
+    {
+     "slot": "a3",
+     "device_id": 15123,
+     "name_msg_id": 172986,
+     "fx": [
+      "cripple"
+     ]
+    },
+    {
+     "slot": "ult",
+     "device_id": 13068,
+     "name_msg_id": 164464,
+     "fx": [
+      "heal"
+     ]
+    }
+   ]
+  },
+  "Imani": {
+   "bot_id": 2509,
+   "name_msg_id": 201881,
+   "abilities": [
+    {
+     "slot": "weapon",
+     "device_id": 23860,
+     "name_msg_id": 202454,
+     "fx": [
+      "slow"
+     ]
+    },
+    {
+     "slot": "a1",
+     "device_id": 23897,
+     "name_msg_id": 202779,
+     "fx": [
+      "mobility"
+     ]
+    },
+    {
+     "slot": "a2",
+     "device_id": 23862,
+     "name_msg_id": 202456,
+     "fx": []
+    },
+    {
+     "slot": "a3",
+     "device_id": 23852,
+     "name_msg_id": 202438,
+     "fx": [
+      "root"
+     ]
+    },
+    {
+     "slot": "ult",
+     "device_id": 23718,
+     "name_msg_id": 201892,
+     "fx": [
+      "mobility",
+      "deploy"
+     ]
+    }
+   ]
+  },
+  "Inara": {
+   "bot_id": 2348,
+   "name_msg_id": 177567,
+   "abilities": [
+    {
+     "slot": "weapon",
+     "device_id": 16246,
+     "name_msg_id": 177572,
+     "fx": []
+    },
+    {
+     "slot": "a1",
+     "device_id": 16248,
+     "name_msg_id": 177580,
+     "fx": [
+      "slow",
+      "deploy"
+     ]
+    },
+    {
+     "slot": "a2",
+     "device_id": 16250,
+     "name_msg_id": 177583,
+     "fx": [
+      "deploy"
+     ]
+    },
+    {
+     "slot": "a3",
+     "device_id": 16251,
+     "name_msg_id": 177584,
+     "fx": [
+      "deploy"
+     ]
+    },
+    {
+     "slot": "ult",
+     "device_id": 16252,
+     "name_msg_id": 177585,
+     "fx": [
+      "stun"
+     ]
+    }
+   ]
+  },
+  "Io": {
+   "bot_id": 2517,
+   "name_msg_id": 205206,
+   "abilities": [
+    {
+     "slot": "weapon",
+     "device_id": 24291,
+     "name_msg_id": 205204,
+     "fx": []
+    },
+    {
+     "slot": "a1",
+     "device_id": 24289,
+     "name_msg_id": 205199,
+     "fx": [
+      "mobility"
+     ]
+    },
+    {
+     "slot": "a2",
+     "device_id": 24297,
+     "name_msg_id": 205227,
+     "fx": [
+      "stun",
+      "heal",
+      "deploy"
+     ]
+    },
+    {
+     "slot": "a3",
+     "device_id": 24293,
+     "name_msg_id": 205216,
+     "fx": [
+      "heal"
+     ]
+    },
+    {
+     "slot": "ult",
+     "device_id": 24622,
+     "name_msg_id": 206771,
+     "fx": [
+      "pull"
+     ]
+    }
+   ]
+  },
+  "Jenos": {
+   "bot_id": 2431,
+   "name_msg_id": 180814,
+   "abilities": [
+    {
+     "slot": "weapon",
+     "device_id": 17176,
+     "name_msg_id": 180810,
+     "fx": []
+    },
+    {
+     "slot": "a1",
+     "device_id": 19186,
+     "name_msg_id": 184592,
+     "fx": []
+    },
+    {
+     "slot": "a2",
+     "device_id": 19187,
+     "name_msg_id": 184596,
+     "fx": [
+      "pull",
+      "cripple"
+     ]
+    },
+    {
+     "slot": "a3",
+     "device_id": 17178,
+     "name_msg_id": 180813,
+     "fx": []
+    },
+    {
+     "slot": "ult",
+     "device_id": 18397,
+     "name_msg_id": 182472,
+     "fx": [
+      "reveal",
+      "deploy"
+     ]
+    }
+   ]
+  },
+  "Kasumi": {
+   "bot_id": 2555,
+   "name_msg_id": 239354,
+   "abilities": [
+    {
+     "slot": "weapon",
+     "device_id": 31245,
+     "name_msg_id": 239359,
+     "fx": [
+      "deploy"
+     ]
+    },
+    {
+     "slot": "a1",
+     "device_id": 31248,
+     "name_msg_id": 239362,
+     "fx": [
+      "stealth",
+      "mobility"
+     ]
+    },
+    {
+     "slot": "a2",
+     "device_id": 31247,
+     "name_msg_id": 239361,
+     "fx": [
+      "slow",
+      "stealth"
+     ]
+    },
+    {
+     "slot": "a3",
+     "device_id": 31246,
+     "name_msg_id": 239360,
+     "fx": []
+    },
+    {
+     "slot": "ult",
+     "device_id": 31249,
+     "name_msg_id": 239363,
+     "fx": [
+      "disarm"
+     ]
+    }
+   ]
+  },
+  "Khan": {
+   "bot_id": 2479,
+   "name_msg_id": 188236,
+   "abilities": [
+    {
+     "slot": "weapon",
+     "device_id": 19692,
+     "name_msg_id": 188243,
+     "fx": []
+    },
+    {
+     "slot": "a1",
+     "device_id": 19749,
+     "name_msg_id": 188500,
+     "fx": [
+      "stun"
+     ]
+    },
+    {
+     "slot": "a2",
+     "device_id": 19748,
+     "name_msg_id": 188496,
+     "fx": []
+    },
+    {
+     "slot": "a3",
+     "device_id": 19876,
+     "name_msg_id": 188951,
+     "fx": []
+    },
+    {
+     "slot": "ult",
+     "device_id": 22154,
+     "name_msg_id": 195930,
+     "fx": [
+      "pull"
+     ]
+    }
+   ]
+  },
+  "Kinessa": {
+   "bot_id": 2249,
+   "name_msg_id": 163390,
+   "abilities": [
+    {
+     "slot": "weapon",
+     "device_id": 12872,
+     "name_msg_id": 163388,
+     "fx": [
+      "shock",
+      "reveal"
+     ]
+    },
+    {
+     "slot": "a1",
+     "device_id": 12869,
+     "name_msg_id": 163370,
+     "fx": [
+      "mobility"
+     ]
+    },
+    {
+     "slot": "a2",
+     "device_id": 13184,
+     "name_msg_id": 164965,
+     "fx": [
+      "shock",
+      "slow"
+     ]
+    },
+    {
+     "slot": "a3",
+     "device_id": 13142,
+     "name_msg_id": 164763,
+     "fx": []
+    },
+    {
+     "slot": "ult",
+     "device_id": 13250,
+     "name_msg_id": 165239,
+     "fx": []
+    }
+   ]
+  },
+  "Koga": {
+   "bot_id": 2493,
+   "name_msg_id": 200071,
+   "abilities": [
+    {
+     "slot": "weapon",
+     "device_id": 23399,
+     "name_msg_id": 200073,
+     "fx": []
+    },
+    {
+     "slot": "a1",
+     "device_id": 23402,
+     "name_msg_id": 200081,
+     "fx": []
+    },
+    {
+     "slot": "a2",
+     "device_id": 23403,
+     "name_msg_id": 200090,
+     "fx": []
+    },
+    {
+     "slot": "a3",
+     "device_id": 23447,
+     "name_msg_id": 200336,
+     "fx": [
+      "mobility"
+     ]
+    },
+    {
+     "slot": "ult",
+     "device_id": 23404,
+     "name_msg_id": 200092,
+     "fx": []
+    }
+   ]
+  },
+  "Lex": {
+   "bot_id": 2362,
+   "name_msg_id": 178458,
+   "abilities": [
+    {
+     "slot": "weapon",
+     "device_id": 16530,
+     "name_msg_id": 178462,
+     "fx": []
+    },
+    {
+     "slot": "a1",
+     "device_id": 16535,
+     "name_msg_id": 178475,
+     "fx": []
+    },
+    {
+     "slot": "a2",
+     "device_id": 16534,
+     "name_msg_id": 178473,
+     "fx": [
+      "reveal"
+     ]
+    },
+    {
+     "slot": "a3",
+     "device_id": 16701,
+     "name_msg_id": 179196,
+     "fx": []
+    },
+    {
+     "slot": "ult",
+     "device_id": 16702,
+     "name_msg_id": 179205,
+     "fx": []
+    }
+   ]
+  },
+  "Lian": {
+   "bot_id": 2417,
+   "name_msg_id": 180635,
+   "abilities": [
+    {
+     "slot": "weapon",
+     "device_id": 17115,
+     "name_msg_id": 180568,
+     "fx": []
+    },
+    {
+     "slot": "a1",
+     "device_id": 18498,
+     "name_msg_id": 182694,
+     "fx": []
+    },
+    {
+     "slot": "a2",
+     "device_id": 19137,
+     "name_msg_id": 184467,
+     "fx": []
+    },
+    {
+     "slot": "a3",
+     "device_id": 17181,
+     "name_msg_id": 180820,
+     "fx": []
+    },
+    {
+     "slot": "ult",
+     "device_id": 19078,
+     "name_msg_id": 184333,
+     "fx": []
+    }
+   ]
+  },
+  "Lillith": {
+   "bot_id": 2551,
+   "name_msg_id": 234175,
+   "abilities": [
+    {
+     "slot": "weapon",
+     "device_id": 30610,
+     "name_msg_id": 234179,
+     "fx": []
+    },
+    {
+     "slot": "a1",
+     "device_id": 30612,
+     "name_msg_id": 234181,
+     "fx": []
+    },
+    {
+     "slot": "a2",
+     "device_id": 30609,
+     "name_msg_id": 234178,
+     "fx": [
+      "heal",
+      "deploy"
+     ]
+    },
+    {
+     "slot": "a3",
+     "device_id": 30611,
+     "name_msg_id": 234180,
+     "fx": []
+    },
+    {
+     "slot": "ult",
+     "device_id": 30613,
+     "name_msg_id": 234182,
+     "fx": []
+    }
+   ]
+  },
+  "Maeve": {
+   "bot_id": 2338,
+   "name_msg_id": 177460,
+   "abilities": [
+    {
+     "slot": "weapon",
+     "device_id": 16218,
+     "name_msg_id": 177479,
+     "fx": []
+    },
+    {
+     "slot": "a1",
+     "device_id": 16228,
+     "name_msg_id": 177503,
+     "fx": []
+    },
+    {
+     "slot": "a2",
+     "device_id": 16306,
+     "name_msg_id": 177766,
+     "fx": []
+    },
+    {
+     "slot": "a3",
+     "device_id": 16235,
+     "name_msg_id": 177526,
+     "fx": [
+      "knockback",
+      "mobility"
+     ]
+    },
+    {
+     "slot": "ult",
+     "device_id": 16241,
+     "name_msg_id": 177546,
+     "fx": []
+    }
+   ]
+  },
+  "Makoa": {
+   "bot_id": 2288,
+   "name_msg_id": 169417,
+   "abilities": [
+    {
+     "slot": "weapon",
+     "device_id": 14182,
+     "name_msg_id": 169422,
+     "fx": []
+    },
+    {
+     "slot": "a1",
+     "device_id": 14191,
+     "name_msg_id": 169449,
+     "fx": [
+      "knockback"
+     ]
+    },
+    {
+     "slot": "a2",
+     "device_id": 14844,
+     "name_msg_id": 171912,
+     "fx": [
+      "shield"
+     ]
+    },
+    {
+     "slot": "a3",
+     "device_id": 14181,
+     "name_msg_id": 169419,
+     "fx": [
+      "stun"
+     ]
+    },
+    {
+     "slot": "ult",
+     "device_id": 14602,
+     "name_msg_id": 171310,
+     "fx": []
+    }
+   ]
+  },
+  "Mal'Damba": {
+   "bot_id": 2303,
+   "name_msg_id": 171174,
+   "abilities": [
+    {
+     "slot": "weapon",
+     "device_id": 14600,
+     "name_msg_id": 171301,
+     "fx": [
+      "stun"
+     ]
+    },
+    {
+     "slot": "a1",
+     "device_id": 15341,
+     "name_msg_id": 174034,
+     "fx": []
+    },
+    {
+     "slot": "a2",
+     "device_id": 14842,
+     "name_msg_id": 171894,
+     "fx": []
+    },
+    {
+     "slot": "a3",
+     "device_id": 14822,
+     "name_msg_id": 171843,
+     "fx": []
+    },
+    {
+     "slot": "ult",
+     "device_id": 14861,
+     "name_msg_id": 171983,
+     "fx": [
+      "fear"
+     ]
+    }
+   ]
+  },
+  "Moji": {
+   "bot_id": 2481,
+   "name_msg_id": 189206,
+   "abilities": [
+    {
+     "slot": "weapon",
+     "device_id": 33283,
+     "name_msg_id": 803900,
+     "fx": [
+      "heal"
+     ]
+    },
+    {
+     "slot": "a1",
+     "device_id": 33287,
+     "name_msg_id": 803913,
+     "fx": []
+    },
+    {
+     "slot": "a2",
+     "device_id": 33286,
+     "name_msg_id": 803910,
+     "fx": [
+      "shield"
+     ]
+    },
+    {
+     "slot": "a3",
+     "device_id": 33288,
+     "name_msg_id": 803916,
+     "fx": [
+      "heal"
+     ]
+    },
+    {
+     "slot": "ult",
+     "device_id": 33285,
+     "name_msg_id": 803904,
+     "fx": [
+      "polymorph"
+     ]
+    }
+   ]
+  },
+  "Nyx": {
+   "bot_id": 2560,
+   "name_msg_id": 241494,
+   "abilities": [
+    {
+     "slot": "weapon",
+     "device_id": 31633,
+     "name_msg_id": 241496,
+     "fx": []
+    },
+    {
+     "slot": "a1",
+     "device_id": 31636,
+     "name_msg_id": 241499,
+     "fx": [
+      "pull",
+      "burn",
+      "deploy"
+     ]
+    },
+    {
+     "slot": "a2",
+     "device_id": 31635,
+     "name_msg_id": 241498,
+     "fx": [
+      "shield"
+     ]
+    },
+    {
+     "slot": "a3",
+     "device_id": 31634,
+     "name_msg_id": 241497,
+     "fx": []
+    },
+    {
+     "slot": "ult",
+     "device_id": 31637,
+     "name_msg_id": 241500,
+     "fx": [
+      "stun"
+     ]
+    }
+   ]
+  },
+  "Octavia": {
+   "bot_id": 2540,
+   "name_msg_id": 215243,
+   "abilities": [
+    {
+     "slot": "weapon",
+     "device_id": 26882,
+     "name_msg_id": 215246,
+     "fx": []
+    },
+    {
+     "slot": "a1",
+     "device_id": 26793,
+     "name_msg_id": 214913,
+     "fx": [
+      "mobility",
+      "deploy"
+     ]
+    },
+    {
+     "slot": "a2",
+     "device_id": 26888,
+     "name_msg_id": 215267,
+     "fx": [
+      "slow"
+     ]
+    },
+    {
+     "slot": "a3",
+     "device_id": 26889,
+     "name_msg_id": 215270,
+     "fx": []
+    },
+    {
+     "slot": "ult",
+     "device_id": 27105,
+     "name_msg_id": 216440,
+     "fx": []
+    }
+   ]
+  },
+  "Omen": {
+   "bot_id": 2566,
+   "name_msg_id": 248194,
+   "abilities": [
+    {
+     "slot": "weapon",
+     "device_id": 32617,
+     "name_msg_id": 248199,
+     "fx": []
+    },
+    {
+     "slot": "a1",
+     "device_id": 32622,
+     "name_msg_id": 248202,
+     "fx": [
+      "mobility"
+     ]
+    },
+    {
+     "slot": "a2",
+     "device_id": 32619,
+     "name_msg_id": 248201,
+     "fx": [
+      "knockback",
+      "pull",
+      "burn",
+      "weaken"
+     ]
+    },
+    {
+     "slot": "a3",
+     "device_id": 32623,
+     "name_msg_id": 248203,
+     "fx": [
+      "slow",
+      "burn",
+      "deploy"
+     ]
+    },
+    {
+     "slot": "ult",
+     "device_id": 32618,
+     "name_msg_id": 248200,
+     "fx": []
+    }
+   ]
+  },
+  "Pip": {
+   "bot_id": 2056,
+   "name_msg_id": 128386,
+   "abilities": [
+    {
+     "slot": "weapon",
+     "device_id": 10773,
+     "name_msg_id": 131151,
+     "fx": []
+    },
+    {
+     "slot": "a1",
+     "device_id": 12681,
+     "name_msg_id": 161888,
+     "fx": []
+    },
+    {
+     "slot": "a2",
+     "device_id": 13028,
+     "name_msg_id": 164169,
+     "fx": [
+      "heal"
+     ]
+    },
+    {
+     "slot": "a3",
+     "device_id": 12635,
+     "name_msg_id": 161531,
+     "fx": [
+      "slow"
+     ]
+    },
+    {
+     "slot": "ult",
+     "device_id": 13027,
+     "name_msg_id": 164165,
+     "fx": [
+      "polymorph"
+     ]
+    }
+   ]
+  },
+  "Raum": {
+   "bot_id": 2528,
+   "name_msg_id": 206415,
+   "abilities": [
+    {
+     "slot": "weapon",
+     "device_id": 24548,
+     "name_msg_id": 206463,
+     "fx": []
+    },
+    {
+     "slot": "a1",
+     "device_id": 24774,
+     "name_msg_id": 207706,
+     "fx": [
+      "knockback"
+     ]
+    },
+    {
+     "slot": "a2",
+     "device_id": 24773,
+     "name_msg_id": 207702,
+     "fx": []
+    },
+    {
+     "slot": "a3",
+     "device_id": 24776,
+     "name_msg_id": 207710,
+     "fx": []
+    },
+    {
+     "slot": "ult",
+     "device_id": 24772,
+     "name_msg_id": 207700,
+     "fx": [
+      "stun",
+      "deploy"
+     ]
+    }
+   ]
+  },
+  "Rei": {
+   "bot_id": 2542,
+   "name_msg_id": 217581,
+   "abilities": [
+    {
+     "slot": "weapon",
+     "device_id": 27309,
+     "name_msg_id": 218677,
+     "fx": []
+    },
+    {
+     "slot": "a1",
+     "device_id": 27164,
+     "name_msg_id": 217230,
+     "fx": []
+    },
+    {
+     "slot": "a2",
+     "device_id": 27228,
+     "name_msg_id": 217584,
+     "fx": [
+      "slow",
+      "heal"
+     ]
+    },
+    {
+     "slot": "a3",
+     "device_id": 27304,
+     "name_msg_id": 218642,
+     "fx": [
+      "heal"
+     ]
+    },
+    {
+     "slot": "ult",
+     "device_id": 27306,
+     "name_msg_id": 218665,
+     "fx": []
+    }
+   ]
+  },
+  "Ruckus": {
+   "bot_id": 2149,
+   "name_msg_id": 139697,
+   "abilities": [
+    {
+     "slot": "weapon",
+     "device_id": 14581,
+     "name_msg_id": 171136,
+     "fx": []
+    },
+    {
+     "slot": "a1",
+     "device_id": 14658,
+     "name_msg_id": 171456,
+     "fx": []
+    },
+    {
+     "slot": "a2",
+     "device_id": 11434,
+     "name_msg_id": 143799,
+     "fx": [
+      "shield"
+     ]
+    },
+    {
+     "slot": "a3",
+     "device_id": 19540,
+     "name_msg_id": 185995,
+     "fx": []
+    },
+    {
+     "slot": "ult",
+     "device_id": 13218,
+     "name_msg_id": 165077,
+     "fx": []
+    }
+   ]
+  },
+  "Saati": {
+   "bot_id": 2543,
+   "name_msg_id": 220060,
+   "abilities": [
+    {
+     "slot": "weapon",
+     "device_id": 27444,
+     "name_msg_id": 220079,
+     "fx": []
+    },
+    {
+     "slot": "a1",
+     "device_id": 27439,
+     "name_msg_id": 220063,
+     "fx": [
+      "knockback",
+      "burn"
+     ]
+    },
+    {
+     "slot": "a2",
+     "device_id": 24896,
+     "name_msg_id": 208163,
+     "fx": [
+      "stealth",
+      "deploy"
+     ]
+    },
+    {
+     "slot": "a3",
+     "device_id": 27498,
+     "name_msg_id": 220367,
+     "fx": []
+    },
+    {
+     "slot": "ult",
+     "device_id": 27451,
+     "name_msg_id": 220105,
+     "fx": []
+    }
+   ]
+  },
+  "Seris": {
+   "bot_id": 2372,
+   "name_msg_id": 178733,
+   "abilities": [
+    {
+     "slot": "weapon",
+     "device_id": 16505,
+     "name_msg_id": 178395,
+     "fx": []
+    },
+    {
+     "slot": "a1",
+     "device_id": 16590,
+     "name_msg_id": 178761,
+     "fx": [
+      "stealth"
+     ]
+    },
+    {
+     "slot": "a2",
+     "device_id": 16592,
+     "name_msg_id": 178796,
+     "fx": [
+      "stun"
+     ]
+    },
+    {
+     "slot": "a3",
+     "device_id": 16589,
+     "name_msg_id": 178752,
+     "fx": [
+      "heal"
+     ]
+    },
+    {
+     "slot": "ult",
+     "device_id": 16593,
+     "name_msg_id": 178815,
+     "fx": [
+      "stun"
+     ]
+    }
+   ]
+  },
+  "Sha Lin": {
+   "bot_id": 2307,
+   "name_msg_id": 172071,
+   "abilities": [
+    {
+     "slot": "weapon",
+     "device_id": 14891,
+     "name_msg_id": 172073,
+     "fx": []
+    },
+    {
+     "slot": "a1",
+     "device_id": 14989,
+     "name_msg_id": 172375,
+     "fx": [
+      "stealth",
+      "mobility"
+     ]
+    },
+    {
+     "slot": "a2",
+     "device_id": 14988,
+     "name_msg_id": 172374,
+     "fx": []
+    },
+    {
+     "slot": "a3",
+     "device_id": 14928,
+     "name_msg_id": 172210,
+     "fx": [
+      "cripple"
+     ]
+    },
+    {
+     "slot": "ult",
+     "device_id": 15266,
+     "name_msg_id": 173658,
+     "fx": [
+      "stealth"
+     ]
+    }
+   ]
+  },
+  "Skye": {
+   "bot_id": 2057,
+   "name_msg_id": 128387,
+   "abilities": [
+    {
+     "slot": "weapon",
+     "device_id": 10762,
+     "name_msg_id": 131118,
+     "fx": [
+      "stealth"
+     ]
+    },
+    {
+     "slot": "a1",
+     "device_id": 10275,
+     "name_msg_id": 126844,
+     "fx": [
+      "stealth"
+     ]
+    },
+    {
+     "slot": "a2",
+     "device_id": 12656,
+     "name_msg_id": 161662,
+     "fx": [
+      "stealth"
+     ]
+    },
+    {
+     "slot": "a3",
+     "device_id": 11491,
+     "name_msg_id": 144453,
+     "fx": [
+      "burn"
+     ]
+    },
+    {
+     "slot": "ult",
+     "device_id": 12984,
+     "name_msg_id": 163987,
+     "fx": []
+    }
+   ]
+  },
+  "Strix": {
+   "bot_id": 2438,
+   "name_msg_id": 183373,
+   "abilities": [
+    {
+     "slot": "weapon",
+     "device_id": 19108,
+     "name_msg_id": 184407,
+     "fx": [
+      "stealth"
+     ]
+    },
+    {
+     "slot": "a1",
+     "device_id": 19145,
+     "name_msg_id": 184492,
+     "fx": [
+      "stealth"
+     ]
+    },
+    {
+     "slot": "a2",
+     "device_id": 19138,
+     "name_msg_id": 184475,
+     "fx": []
+    },
+    {
+     "slot": "a3",
+     "device_id": 19111,
+     "name_msg_id": 184414,
+     "fx": [
+      "reveal",
+      "burn"
+     ]
+    },
+    {
+     "slot": "ult",
+     "device_id": 19198,
+     "name_msg_id": 184617,
+     "fx": [
+      "blind"
+     ]
+    }
+   ]
+  },
+  "Talus": {
+   "bot_id": 2472,
+   "name_msg_id": 184758,
+   "abilities": [
+    {
+     "slot": "weapon",
+     "device_id": 17127,
+     "name_msg_id": 180628,
+     "fx": []
+    },
+    {
+     "slot": "a1",
+     "device_id": 19248,
+     "name_msg_id": 184760,
+     "fx": [
+      "mobility"
+     ]
+    },
+    {
+     "slot": "a2",
+     "device_id": 19479,
+     "name_msg_id": 185778,
+     "fx": []
+    },
+    {
+     "slot": "a3",
+     "device_id": 19331,
+     "name_msg_id": 185073,
+     "fx": [
+      "knockback"
+     ]
+    },
+    {
+     "slot": "ult",
+     "device_id": 19480,
+     "name_msg_id": 185779,
+     "fx": [
+      "knockback",
+      "mobility"
+     ]
+    }
+   ]
+  },
+  "Terminus": {
+   "bot_id": 2477,
+   "name_msg_id": 185653,
+   "abilities": [
+    {
+     "slot": "weapon",
+     "device_id": 19433,
+     "name_msg_id": 185657,
+     "fx": []
+    },
+    {
+     "slot": "a1",
+     "device_id": 19836,
+     "name_msg_id": 188774,
+     "fx": [
+      "slow",
+      "mobility"
+     ]
+    },
+    {
+     "slot": "a2",
+     "device_id": 19478,
+     "name_msg_id": 185773,
+     "fx": []
+    },
+    {
+     "slot": "a3",
+     "device_id": 19481,
+     "name_msg_id": 185786,
+     "fx": []
+    },
+    {
+     "slot": "ult",
+     "device_id": 19489,
+     "name_msg_id": 185805,
+     "fx": []
+    }
+   ]
+  },
+  "Tiberius": {
+   "bot_id": 2529,
+   "name_msg_id": 206419,
+   "abilities": [
+    {
+     "slot": "weapon",
+     "device_id": 24536,
+     "name_msg_id": 206424,
+     "fx": []
+    },
+    {
+     "slot": "a1",
+     "device_id": 24537,
+     "name_msg_id": 206426,
+     "fx": []
+    },
+    {
+     "slot": "a2",
+     "device_id": 24544,
+     "name_msg_id": 206443,
+     "fx": []
+    },
+    {
+     "slot": "a3",
+     "device_id": 24538,
+     "name_msg_id": 206429,
+     "fx": [
+      "slow"
+     ]
+    },
+    {
+     "slot": "ult",
+     "device_id": 25152,
+     "name_msg_id": 209916,
+     "fx": [
+      "mobility"
+     ]
+    }
+   ]
+  },
+  "Torvald": {
+   "bot_id": 2322,
+   "name_msg_id": 175952,
+   "abilities": [
+    {
+     "slot": "weapon",
+     "device_id": 19720,
+     "name_msg_id": 188385,
+     "fx": []
+    },
+    {
+     "slot": "a1",
+     "device_id": 15794,
+     "name_msg_id": 175998,
+     "fx": [
+      "shield"
+     ]
+    },
+    {
+     "slot": "a2",
+     "device_id": 15793,
+     "name_msg_id": 175986,
+     "fx": [
+      "shield"
+     ]
+    },
+    {
+     "slot": "a3",
+     "device_id": 19731,
+     "name_msg_id": 188417,
+     "fx": [
+      "silence",
+      "shock"
+     ]
+    },
+    {
+     "slot": "ult",
+     "device_id": 15862,
+     "name_msg_id": 176187,
+     "fx": [
+      "knockback"
+     ]
+    }
+   ]
+  },
+  "Tyra": {
+   "bot_id": 2314,
+   "name_msg_id": 173470,
+   "abilities": [
+    {
+     "slot": "weapon",
+     "device_id": 15201,
+     "name_msg_id": 173476,
+     "fx": []
+    },
+    {
+     "slot": "a1",
+     "device_id": 15571,
+     "name_msg_id": 174810,
+     "fx": [
+      "reveal",
+      "weaken"
+     ]
+    },
+    {
+     "slot": "a2",
+     "device_id": 15405,
+     "name_msg_id": 174216,
+     "fx": [
+      "burn"
+     ]
+    },
+    {
+     "slot": "a3",
+     "device_id": 15792,
+     "name_msg_id": 175980,
+     "fx": []
+    },
+    {
+     "slot": "ult",
+     "device_id": 14147,
+     "name_msg_id": 169274,
+     "fx": []
+    }
+   ]
+  },
+  "VII": {
+   "bot_id": 2549,
+   "name_msg_id": 222383,
+   "abilities": [
+    {
+     "slot": "weapon",
+     "device_id": 27783,
+     "name_msg_id": 222398,
+     "fx": []
+    },
+    {
+     "slot": "a1",
+     "device_id": 27801,
+     "name_msg_id": 222504,
+     "fx": [
+      "stealth"
+     ]
+    },
+    {
+     "slot": "a2",
+     "device_id": 27787,
+     "name_msg_id": 222411,
+     "fx": []
+    },
+    {
+     "slot": "a3",
+     "device_id": 27794,
+     "name_msg_id": 222439,
+     "fx": []
+    },
+    {
+     "slot": "ult",
+     "device_id": 27796,
+     "name_msg_id": 222448,
+     "fx": [
+      "fear"
+     ]
+    }
+   ]
+  },
+  "Vatu": {
+   "bot_id": 2541,
+   "name_msg_id": 216124,
+   "abilities": [
+    {
+     "slot": "weapon",
+     "device_id": 27043,
+     "name_msg_id": 216133,
+     "fx": []
+    },
+    {
+     "slot": "a1",
+     "device_id": 27049,
+     "name_msg_id": 216161,
+     "fx": [
+      "mobility"
+     ]
+    },
+    {
+     "slot": "a2",
+     "device_id": 27048,
+     "name_msg_id": 216150,
+     "fx": [
+      "mobility"
+     ]
+    },
+    {
+     "slot": "a3",
+     "device_id": 27198,
+     "name_msg_id": 217385,
+     "fx": []
+    },
+    {
+     "slot": "ult",
+     "device_id": 27046,
+     "name_msg_id": 216143,
+     "fx": [
+      "stun",
+      "mobility"
+     ]
+    }
+   ]
+  },
+  "Viktor": {
+   "bot_id": 2285,
+   "name_msg_id": 169156,
+   "abilities": [
+    {
+     "slot": "weapon",
+     "device_id": 14127,
+     "name_msg_id": 169158,
+     "fx": []
+    },
+    {
+     "slot": "a1",
+     "device_id": 14148,
+     "name_msg_id": 169275,
+     "fx": []
+    },
+    {
+     "slot": "a2",
+     "device_id": 14149,
+     "name_msg_id": 169276,
+     "fx": []
+    },
+    {
+     "slot": "a3",
+     "device_id": 14157,
+     "name_msg_id": 169322,
+     "fx": []
+    },
+    {
+     "slot": "ult",
+     "device_id": 14351,
+     "name_msg_id": 170155,
+     "fx": []
+    }
+   ]
+  },
+  "Vivian": {
+   "bot_id": 2480,
+   "name_msg_id": 188296,
+   "abilities": [
+    {
+     "slot": "weapon",
+     "device_id": 19710,
+     "name_msg_id": 188308,
+     "fx": []
+    },
+    {
+     "slot": "a1",
+     "device_id": 19761,
+     "name_msg_id": 188534,
+     "fx": [
+      "reveal",
+      "deploy"
+     ]
+    },
+    {
+     "slot": "a2",
+     "device_id": 19491,
+     "name_msg_id": 185815,
+     "fx": [
+      "shield"
+     ]
+    },
+    {
+     "slot": "a3",
+     "device_id": 19712,
+     "name_msg_id": 188311,
+     "fx": []
+    },
+    {
+     "slot": "ult",
+     "device_id": 19741,
+     "name_msg_id": 188452,
+     "fx": [
+      "shock",
+      "deploy"
+     ]
+    }
+   ]
+  },
+  "Vora": {
+   "bot_id": 2536,
+   "name_msg_id": 211954,
+   "abilities": [
+    {
+     "slot": "weapon",
+     "device_id": 25527,
+     "name_msg_id": 212085,
+     "fx": []
+    },
+    {
+     "slot": "a1",
+     "device_id": 25589,
+     "name_msg_id": 212457,
+     "fx": [
+      "mobility"
+     ]
+    },
+    {
+     "slot": "a2",
+     "device_id": 25532,
+     "name_msg_id": 212126,
+     "fx": [
+      "cripple"
+     ]
+    },
+    {
+     "slot": "a3",
+     "device_id": 25530,
+     "name_msg_id": 212105,
+     "fx": [
+      "knockback",
+      "slow"
+     ]
+    },
+    {
+     "slot": "ult",
+     "device_id": 26296,
+     "name_msg_id": 212777,
+     "fx": [
+      "stun",
+      "silence",
+      "cripple"
+     ]
+    }
+   ]
+  },
+  "Willo": {
+   "bot_id": 2393,
+   "name_msg_id": 179621,
+   "abilities": [
+    {
+     "slot": "weapon",
+     "device_id": 16508,
+     "name_msg_id": 178403,
+     "fx": []
+    },
+    {
+     "slot": "a1",
+     "device_id": 16518,
+     "name_msg_id": 178425,
+     "fx": [
+      "mobility"
+     ]
+    },
+    {
+     "slot": "a2",
+     "device_id": 16905,
+     "name_msg_id": 179884,
+     "fx": []
+    },
+    {
+     "slot": "a3",
+     "device_id": 16902,
+     "name_msg_id": 179876,
+     "fx": []
+    },
+    {
+     "slot": "ult",
+     "device_id": 16679,
+     "name_msg_id": 179137,
+     "fx": [
+      "mobility"
+     ]
+    }
+   ]
+  },
+  "Yagorath": {
+   "bot_id": 2538,
+   "name_msg_id": 213216,
+   "abilities": [
+    {
+     "slot": "weapon",
+     "device_id": 26711,
+     "name_msg_id": 214366,
+     "fx": [
+      "slow"
+     ]
+    },
+    {
+     "slot": "a1",
+     "device_id": 26456,
+     "name_msg_id": 213572,
+     "fx": []
+    },
+    {
+     "slot": "a2",
+     "device_id": 26673,
+     "name_msg_id": 214280,
+     "fx": [
+      "reveal"
+     ]
+    },
+    {
+     "slot": "a3",
+     "device_id": 26523,
+     "name_msg_id": 213817,
+     "fx": []
+    },
+    {
+     "slot": "ult",
+     "device_id": 26664,
+     "name_msg_id": 214244,
+     "fx": []
+    }
+   ]
+  },
+  "Ying": {
+   "bot_id": 2267,
+   "name_msg_id": 165042,
+   "abilities": [
+    {
+     "slot": "weapon",
+     "device_id": 13279,
+     "name_msg_id": 165331,
+     "fx": []
+    },
+    {
+     "slot": "a1",
+     "device_id": 13283,
+     "name_msg_id": 165339,
+     "fx": [
+      "mobility"
+     ]
+    },
+    {
+     "slot": "a2",
+     "device_id": 10335,
+     "name_msg_id": 128183,
+     "fx": []
+    },
+    {
+     "slot": "a3",
+     "device_id": 13284,
+     "name_msg_id": 165369,
+     "fx": []
+    },
+    {
+     "slot": "ult",
+     "device_id": 14048,
+     "name_msg_id": 168875,
+     "fx": [
+      "mobility"
+     ]
+    }
+   ]
+  },
+  "Zhin": {
+   "bot_id": 2420,
+   "name_msg_id": 180677,
+   "abilities": [
+    {
+     "slot": "weapon",
+     "device_id": 17129,
+     "name_msg_id": 180633,
+     "fx": []
+    },
+    {
+     "slot": "a1",
+     "device_id": 18234,
+     "name_msg_id": 182032,
+     "fx": []
+    },
+    {
+     "slot": "a2",
+     "device_id": 18235,
+     "name_msg_id": 182035,
+     "fx": []
+    },
+    {
+     "slot": "a3",
+     "device_id": 18226,
+     "name_msg_id": 181998,
+     "fx": []
+    },
+    {
+     "slot": "ult",
+     "device_id": 18236,
+     "name_msg_id": 182041,
+     "fx": [
+      "stun"
+     ]
+    }
+   ]
+  }
+ },
+ "roles": {
+  "Frontline": 172734,
+  "Damage": 172737,
+  "Flank": 172735,
+  "Support": 172736
+ },
+ "categories": {
+  "Defense": 163325,
+  "Utility": 170285,
+  "Healing": 155201,
+  "Weapon": 155103
+ },
+ "unmapped": []
+}

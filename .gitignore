@@ -30,10 +30,18 @@ __pycache__/
 venv/
 
 # --- Game files and local workspaces (extracted game data, SDK dumps, logs) -----------------------
+# The mod ships and versions no game art and no game text: names are asked from the running game,
+# engine/game_ids_8_1.json holds message ids only.
 Work/
 Extracted/
 types/sdk/
+src/icons/
 *.upk
+*.dat
+*.tfc
+*.dds
+*.swf
+*.gfx
 *.log
 
 # --- Temporary and editor / OS files --------------------------------------------------------------

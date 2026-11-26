@@ -1,7 +1,7 @@
 [mod]
 id = "paladins-smartcounter-81"
 name = "Counter & Shop Helper"
-version = "0.6.2"
+version = "0.6.4"
 icon = "icon.png"
 readme = "README.md"
 dependencies = [
