@@ -1,17 +1,19 @@
 -- Counter & Shop Helper: light auto-detection (champion, teams, map/mode, match clock).
 --
 -- Low cost: called at most once per second (DET.INTERVAL; DET.FAST_INTERVAL in champion select and
--- while the match loads, so a quick pick is not missed), every engine read is protected
--- (pcall), and each player's champion is cached by PRI pointer so it isn't resolved twice.
+-- while the match loads, so a quick pick is not missed), and each player's champion is cached by PRI
+-- pointer so it isn't resolved twice. Properties are read through lib/sc_game.lua (Object:has first);
+-- functions are called only on the classes that declare them. One read is protected as a whole (poll).
 -- Nothing is hooked, nothing is written: reflection reads and the game's own getters only.
 --
 -- Sources:
---   me        local pawn: TgPawn_Character.GetArchetypeBotId() -> champion, else champion select
+--   me        local pawn: TgPawn.GetBotId() -> champion, else champion select
 --             (the lobby's MatchMembers, m_CurrentAllyCustomizeState.nBotId)
 --   allies    in match: GRI.PRIArray + team; champion select: MatchMembers of my half
 --   enemies   in match: GRI.PRIArray + team (PRI.r_PawnOwner, once the pawn has been replicated)
 --   map       prefix of the WorldInfo path ("td_abyss_p.TheWorld..." -> td_abyss_p)
---   mode      heuristics on map / GRI class (MODE_RULES) -> unknown if nothing matches
+--   mode      the game-info class (GRI is_a TgRepInfo_Game_TeamDeathMatch / _Payload, MODE_CLASSES),
+--             else the map name (MODE_MAPS: Siege, onslaught and the range use the base class)
 --   elapsed   GRI.ElapsedTime -> phase early/mid/late
 --
 -- State kept between reads, and when it is dropped:
@@ -34,39 +36,28 @@ DET.INTERVAL = 1.0
 DET.FAST_INTERVAL = 0.25   -- champion select and loading: picks can be quick
 DET.LOADING_GRACE = 60     -- seconds a champion select stays the current game while the match loads
 
--- Mode heuristics: first match wins. `field` = "map" or "gri"; patterns in lowercase.
-DET.MODE_RULES = {
-	{ field = "map", pat = "^shootingrange", mode = "range" },
-	{ field = "map", pat = "^td_", mode = "tdm" },
-	{ field = "gri", pat = "deathmatch", mode = "tdm" },
-	{ field = "gri", pat = "tdm", mode = "tdm" },
-	{ field = "gri", pat = "onslaught", mode = "onslaught" },
-	{ field = "gri", pat = "koth", mode = "onslaught" },
-	{ field = "map", pat = "^ons_", mode = "onslaught" },
-	{ field = "gri", pat = "siege", mode = "siege" },
-	{ field = "gri", pat = "payload", mode = "siege" },
+-- Game mode: the game-info class first (8.1 declarations: TgRepInfo_Game and its subclasses; first
+-- match wins, so the Roulette TDM is a TDM), then the map name for the modes that use the base class
+-- (Siege on sg_icemines_p runs on the base TgRepInfo_Game). Map prefixes of the 8.1 map packages.
+DET.MODE_CLASSES = {
+	{ class = "TgGame.TgRepInfo_Game_TeamDeathMatch", mode = "tdm" },
+	{ class = "TgGame.TgRepInfo_Game_Payload", mode = "siege" },
+}
+DET.MODE_MAPS = {
+	{ pat = "^shootingrange", mode = "range" },
+	{ pat = "^tdm?_", mode = "tdm" },          -- TD_*, TDM_*
+	{ pat = "^ktm_td", mode = "tdm" },
+	{ pat = "^sg[ab]?_", mode = "siege" },     -- SG_*, SGA_*, SGB_*
+	{ pat = "^s_", mode = "siege" },           -- S_CelestialFortress
+	{ pat = "^ons?_", mode = "onslaught" },    -- ON_*
+	{ pat = "^koth_", mode = "onslaught" },    -- King of the Hill: point control, played like onslaught
+	{ pat = "^ktm_koth", mode = "onslaught" },
 }
 -- Maps where no match is in progress (detection paused).
 DET.IDLE_MAPS = { lobbymapv4_p = true, entry = true, ["chaosentry"] = true }
 
-local function try(f, ...)
-	local ok, v = pcall(f, ...)
-	if ok then return v end
-	return nil
-end
-
-local function get(obj, field)
-	if not obj then return nil end
-	return try(function() return obj[field] end)
-end
-
-local function ptr(obj)
-	return obj and try(function() return obj:ptr() end)
-end
-
-local function class_name(obj)
-	return obj and try(function() return obj:class():name() end)
-end
+local G = require("lib.sc_game")
+local get, ptr, class_name = G.field, G.ptr, G.class_name
 
 function DET.new(pred)
 	return setmetatable({
@@ -91,55 +82,52 @@ function DET:champ_of_bot(id)
 	return c and c.name or nil
 end
 
--- Champion of a pawn, cached per pawn class. Each champion has its own TgPawn_* class (listed in
--- sc_data.lua), so the class answers first. A class the data does not list is asked once for
--- GetArchetypeBotId (the champion's bot id), and only when it is a character: the payload of Siege
--- (TgPawn_SiegeEngine_*) and other non-champion pawns have no such function, and asking them made
--- Tempest log "has no property `GetArchetypeBotId`" at every read.
+-- Champion of a pawn, asked of the game: TgPawn.GetBotId() is the champion's bot id whatever the skin
+-- (LiveCheck log: Buck 2147, Maeve 2338...), matched with sc_data.lua's bot_id. GetArchetypeBotId() is
+-- not it: it names the role archetype (2573 Front Line ... 2576 Flank). Only champion pawns are asked:
+-- the Siege payload (TgPawn_SiegeEngine_*) and illusions (TgPawn_Illusion, bot "Ying_Illusion") are
+-- players' pawns but not champions. The answer is cached per pawn class (one TgPawn_* class per
+-- champion); an id the data does not know (0 while a pawn is set up or torn down) is not cached, so
+-- it is asked again at the next read. Returns the champion (or nil) and the bot id asked.
+local NOT_CHAMPIONS = { "SiegeEngine", "Payload", "Illusion" }
+
 local function champion_like(pawn, cn)
-	if cn:find("SiegeEngine", 1, true) or cn:find("Payload", 1, true) then return false end
-	local ok = try(function() return pawn:is_a("TgGame.TgPawn_Character") end)
-	return ok ~= false
+	for _, part in ipairs(NOT_CHAMPIONS) do
+		if cn:find(part, 1, true) then return false end
+	end
+	return G.is_a(pawn, "TgGame.TgPawn") == true
 end
 
 function DET:champ_of_pawn(pawn)
-	if not pawn then return nil end
 	local cn = class_name(pawn)
 	if not cn then return nil end
 	local hit = self.pawn_cache[cn]
-	if hit == nil then
-		local c = self.pred.by_pawn[cn]
-		if c then
-			hit = c.name
-		elseif champion_like(pawn, cn) then
-			hit = self:champ_of_bot(try(function() return pawn:GetArchetypeBotId() end)) or false
-		else
-			hit = false
-		end
-		self.pawn_cache[cn] = hit
+	if hit ~= nil then return hit or nil end
+	if not champion_like(pawn, cn) then
+		self.pawn_cache[cn] = false
+		return nil
 	end
-	return hit or nil
-end
-
-function DET:champ_of_pri(pri)
-	return self:champ_of_pawn(get(pri, "r_PawnOwner"))
+	local bot = pawn:GetBotId()
+	local name = self:champ_of_bot(bot)
+	if name then self.pawn_cache[cn] = name end
+	return name, bot
 end
 
 -- Team number of a player (TgRepInfo_Player.GetTaskForceNumber; PRI.r_TaskForce is the team object,
 -- not a number). nil when unknown: 255 means no team (shooting range, spectators).
 local function task_force(pri)
-	local tf = try(function() return pri:GetTaskForceNumber() end)
+	if G.is_a(pri, "TgGame.TgRepInfo_Player") ~= true then return nil end
+	local tf = pri:GetTaskForceNumber()
 	if type(tf) ~= "number" or tf == 255 then return nil end
 	return tf
 end
 
--- "ally" / "enemy" / nil (unknown for now).
-local function team_of(pri, my_tf)
-	local tf = task_force(pri)
+-- "ally" / "enemy" / nil (unknown for now). tf: the player's team number (task_force).
+local function team_of(pri, tf, my_tf)
 	if my_tf and tf then return tf == my_tf and "ally" or "enemy" end
 	local pawn = get(pri, "r_PawnOwner")
-	if pawn then
-		local friendly = try(function() return pawn:IsFriendlyWithLocalPawn() end)
+	if G.is_a(pawn, "TgGame.TgPawn") == true then
+		local friendly = pawn:IsFriendlyWithLocalPawn()
 		if friendly ~= nil then return friendly and "ally" or "enemy" end
 	end
 	return nil
@@ -147,14 +135,17 @@ end
 
 local function map_of(pc)
 	local wi = get(pc, "WorldInfo")
-	local p = wi and try(function() return wi:path() end)
+	local p = wi and wi:path()
 	return p and (p:match("^([^%.:]+)") or p):lower() or nil
 end
 
-function DET:guess_mode(map, gri_class)
-	local v = { map = map or "", gri = (gri_class or ""):lower() }
-	for _, r in ipairs(DET.MODE_RULES) do
-		if v[r.field]:find(r.pat) then return r.mode, r.field .. "~" .. r.pat end
+-- (mode, rule) from the game-info object, else from the map name; nil when neither says.
+function DET:guess_mode(map, gri)
+	for _, r in ipairs(DET.MODE_CLASSES) do
+		if G.is_a(gri, r.class) == true then return r.mode, "class " .. r.class end
+	end
+	for _, r in ipairs(DET.MODE_MAPS) do
+		if (map or ""):find(r.pat) then return r.mode, "map~" .. r.pat end
 	end
 	return nil, nil
 end
@@ -163,22 +154,20 @@ end
 function DET:read_champ_select(pc)
 	local m = get(get(get(get(pc, "myHUD"), "m_pMovie"), "m_UIDataManager"), "m_Match")
 	local members = get(m, "MatchMembers")
-	if not members or (try(function() return #members end) or 0) == 0 then return nil end
+	if not members or #members == 0 then return nil end
 	local all, my_half, names = {}, nil, {}
-	try(function()
-		for i, mm in members:items() do
-			if mm then
-				local half = math.floor((get(mm, "m_nMctsMatchIndex") or (i - 1)) / 5)
-				local pd = get(mm, "pPlayerData")
-				local is_self = pd and get(pd, "bIsSelf") or false
-				local cs = get(mm, "m_CurrentAllyCustomizeState")
-				local bot = cs and get(cs, "nBotId")
-				all[#all + 1] = { half = half, self = is_self, champ = self:champ_of_bot(bot), bot = bot }
-				names[#names + 1] = tostring(get(mm, "m_sName") or "?")
-				if is_self then my_half = half end
-			end
+	for i, mm in members:items() do
+		if mm then
+			local half = math.floor((get(mm, "m_nMctsMatchIndex") or (i - 1)) / 5)
+			local pd = get(mm, "pPlayerData")
+			local is_self = pd and get(pd, "bIsSelf") or false
+			local cs = get(mm, "m_CurrentAllyCustomizeState")
+			local bot = cs and get(cs, "nBotId")
+			all[#all + 1] = { half = half, self = is_self, champ = self:champ_of_bot(bot), bot = bot }
+			names[#names + 1] = tostring(get(mm, "m_sName") or "?")
+			if is_self then my_half = half end
 		end
-	end)
+	end
 	if #all == 0 then return nil end
 	if my_half == nil then my_half = all[1].half end
 	local me, allies = nil, {}
@@ -188,7 +177,7 @@ function DET:read_champ_select(pc)
 		end
 	end
 	-- The roster names the game: same match id and players = same game (champion select, then match).
-	local match_id = try(function() return m.dwMatchId.A end)
+	local match_id = get(get(m, "dwMatchId"), "A")
 	local id = tostring(match_id or "?") .. ":" .. table.concat(names, ",")
 	return { me = me, allies = allies, members = all, id = id }
 end
@@ -257,7 +246,7 @@ function DET:read(now)
 	self.match_world = self.world
 	if self.last_cs then self.last_cs.used = true end   -- that champion select led to this match
 	st.gri_class = class_name(gri)
-	st.mode, st.mode_rule = self:guess_mode(st.map, st.gri_class)
+	st.mode, st.mode_rule = self:guess_mode(st.map, gri)
 	local elapsed = get(gri, "ElapsedTime")
 	if type(elapsed) == "number" then
 		st.elapsed = elapsed
@@ -277,22 +266,32 @@ function DET:read(now)
 	local my_tf = my_pri and task_force(my_pri)
 	local list = get(gri, "PRIArray")
 	local seen = {}
+	st.enemy_hp, st.players, st.my_tf = {}, {}, my_tf
 	if list then
-		try(function()
-			for _, pri in list:items() do
-				local p = ptr(pri)
-				if p and p ~= my_ptr and try(function() return pri:is_a("TgGame.TgRepInfo_Player") end) then
-					seen[p] = true
-					local rec = self.by_pri[p] or {}
-					self.by_pri[p] = rec
-					if not rec.champ then rec.champ = self:champ_of_pri(pri) end
-					local t = team_of(pri, my_tf)
-					if t then rec.team = t end
-					if rec.champ and rec.team == "ally" then st.allies[#st.allies + 1] = rec.champ end
-					if rec.champ and rec.team == "enemy" then st.enemies[#st.enemies + 1] = rec.champ end
+		for _, pri in list:items() do
+			local p = ptr(pri)
+			if p and p ~= my_ptr and G.is_a(pri, "TgGame.TgRepInfo_Player") == true then
+				seen[p] = true
+				local rec = self.by_pri[p] or {}
+				self.by_pri[p] = rec
+				if not rec.champ then
+					local pawn = get(pri, "r_PawnOwner")
+					rec.pawn = class_name(pawn)
+					rec.champ, rec.bot = self:champ_of_pawn(pawn)
+				end
+				rec.tf = task_force(pri)
+				local t = team_of(pri, rec.tf, my_tf)
+				if t then rec.team = t end
+				st.players[#st.players + 1] = rec   -- what was read per player (report button)
+				if rec.champ and rec.team == "ally" then st.allies[#st.allies + 1] = rec.champ end
+				if rec.champ and rec.team == "enemy" then
+					st.enemies[#st.enemies + 1] = rec.champ
+					-- the enemy's max health as the game replicates it (cards and talents included)
+					local hp = get(pri, "r_nHealthMaximum")
+					if type(hp) == "number" and hp > 0 then st.enemy_hp[rec.champ] = hp end
 				end
 			end
-		end)
+		end
 	end
 	-- Players gone (end of match, map change): forget their cache.
 	for p in pairs(self.by_pri) do
@@ -326,8 +325,11 @@ function DET:poll(now)
 end
 
 function DET:signature(st)
+	local hp = {}
+	for name, v in pairs(st.enemy_hp or {}) do hp[#hp + 1] = name .. "=" .. v end
+	table.sort(hp)
 	return table.concat({ st.status or "", st.me or "", st.mode or "", st.phase or "",
-		table.concat(st.allies or {}, ","), table.concat(st.enemies or {}, ",") }, "|")
+		table.concat(st.allies or {}, ","), table.concat(st.enemies or {}, ","), table.concat(hp, ",") }, "|")
 end
 
 return DET

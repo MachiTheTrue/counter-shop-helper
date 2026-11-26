@@ -6,7 +6,7 @@
 
 <p align="center">
   A Lua mod for <b>Paladins 8.1</b> (Wekono's Wake, build 8.1.5839.0) · by <b>Machi Konno</b> · Discord: <code>machi.konno</code><br>
-  Requires <b>Tempest Scripting</b> 1.0.0 or later · <a href="../../releases">Download</a> · <a href="CHANGELOG.md">Changelog</a>
+  Requires <b>Tempest Scripting</b> 1.1.0 or later · <a href="../../releases">Download</a> · <a href="CHANGELOG.md">Changelog</a>
 </p>
 
 > 🇫🇷 **En français :** le mod est entièrement traduit en jeu (8 langues, dont le français). Les notes techniques sont en français dans [DEVELOPPEMENT.md](DEVELOPPEMENT.md).
@@ -73,7 +73,7 @@ Search for "Counter & Shop Helper" in the Launcher's mods and install it.
 ## Updates & changelog
 - **What changed:** [CHANGELOG.md](CHANGELOG.md), one section per version, newest first.
 - **Downloads:** [GitHub Releases](../../releases). Each `vX.Y.Z` tag has the signed `.tempest` package and that version's notes.
-- **Current version:** 0.6.4.
+- **Current version:** 0.7.0.
 
 ## Credits
 - **Made by Machi Konno** · Discord: `machi.konno`.

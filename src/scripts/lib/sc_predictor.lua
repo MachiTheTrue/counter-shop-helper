@@ -17,14 +17,13 @@ local function key_of(s)
 end
 
 function M.new(D)
-	local self = setmetatable({ D = D, by_name = {}, by_key = {}, by_pawn = {}, by_bot = {} }, M)
+	local self = setmetatable({ D = D, by_name = {}, by_key = {}, by_bot = {}, live_hp = {} }, M)
 	for i, c in ipairs(D.champions) do
 		c.index = i
 		c.tagset = {}
 		for _, t in ipairs(c.tags) do c.tagset[t] = true end
 		self.by_name[c.name:lower()] = c
 		self.by_key[key_of(c.name)] = c
-		self.by_pawn[c.pawn] = c
 		self.by_bot[c.bot_id] = c
 	end
 	for bot, name in pairs(D.extra_bot_ids or {}) do
@@ -163,7 +162,7 @@ function M:rank_items(player, enemies, forecast, phase, style)
 			add(r.item, pts / n * 2)
 			if pts >= 4 then
 				reasons[r.item] = reasons[r.item] or {}
-				table.insert(reasons[r.item], { enemy = e.name, key = r.key, args = r.args })
+				table.insert(reasons[r.item], { enemy = e.name, key = r.key })
 			end
 		end
 	end
@@ -173,9 +172,12 @@ function M:rank_items(player, enemies, forecast, phase, style)
 			add(item, p * link * D.archetype_scale)
 		end
 	end
+	-- squishy: live max health at most D.squishy_hp (TgRepInfo_Player.r_nHealthMaximum, cards included).
+	-- The mod ships no champion health: an enemy without a live value (picked by hand) is not counted.
 	local squishy = 0
 	for _, e in ipairs(enemies) do
-		if e.hp <= 2200 then squishy = squishy + 1 end
+		local hp = self.live_hp[e.name]
+		if hp and hp <= D.squishy_hp then squishy = squishy + 1 end
 	end
 	if squishy > 0 then
 		add("Sentinel", squishy / n * 3)
@@ -198,7 +200,7 @@ function M:rank_items(player, enemies, forecast, phase, style)
 			local why = explain(self, item, reasons[item], forecast)
 			why.own, why.style = o, style
 			ranked[#ranked + 1] = { item = item, score = round(score, 1), first = first[item], own = o,
-				category = (D.items[item] or {}).category, cost_per_level = (D.items[item] or {}).cost, why = why }
+				category = (D.items[item] or {}).category, why = why }
 		end
 	end
 	table.sort(ranked, function(a, b)
@@ -208,7 +210,7 @@ function M:rank_items(player, enemies, forecast, phase, style)
 	local top = ranked[1] and ranked[1].score or 1
 	for i, r in ipairs(ranked) do
 		r.order = i <= 3 and tostring(i) or "4+"
-		r.suggested_level = math.min(M.level_for(r.score, top), M.ranks(D, r.item))
+		r.suggested_level = math.min(M.level_for(r.score, top), D.max_rank)
 	end
 	return ranked
 end
@@ -217,17 +219,11 @@ function M.level_for(score, top)
 	return (score >= 0.75 * top and 3) or (score >= 0.45 * top and 2) or 1
 end
 
--- Max shop rank of an item (game data: one device mode per rank; 3 for every 8.1 item).
-function M.ranks(D, item)
-	local it = D.items[item]
-	return (it and tonumber(it.ranks)) or 3
-end
-
 function M.clean_owned(D, owned)
 	local own = {}
 	for k, v in pairs(owned or {}) do
 		local r = math.floor(tonumber(v) or 0)
-		if r > 0 and D.items[k] then own[k] = math.min(M.ranks(D, k), r) end
+		if r > 0 and D.items[k] then own[k] = math.min(D.max_rank, r) end
 	end
 	return own
 end
@@ -335,7 +331,7 @@ function M:build(ranked, owned)
 	for i, p in ipairs(chosen) do
 		local rank = own[p.item] or 0
 		local primary = i <= #core
-		local target = primary and math.min(M.level_for(p.eff, top), M.ranks(D, p.item)) or 1
+		local target = primary and math.min(M.level_for(p.eff, top), D.max_rank) or 1
 		if rank > 0 and not primary then target = rank end
 		local alt
 		for _, q in ipairs(pool) do
@@ -420,7 +416,7 @@ function M:threats(enemies, build)
 		end
 		out[#out + 1] = { name = e.name, role = e.role, danger = round(danger, 1), tags = tags, abilities = abil,
 			answer = answer and answer.item, answer_in_build = answer ~= nil and in_build[answer.item] == true,
-			reason_key = answer and answer.key, reason_args = answer and answer.args, index = i }
+			reason_key = answer and answer.key, index = i }
 	end
 	table.sort(out, function(a, b)
 		if a.danger ~= b.danger then return a.danger > b.danger end

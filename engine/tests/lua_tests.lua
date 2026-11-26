@@ -28,6 +28,14 @@ end
 
 local function section(name) note("== " .. name) end
 
+-- ------------------------------------------------------------------ LuaJIT's `bit` (the game has it; Lua 5.1 does not)
+-- ImGui flags are distinct single bits, so OR is their sum when each appears once.
+bit = bit or { bor = function(...)
+	local s = 0
+	for _, v in ipairs({ ... }) do s = s + v end
+	return s
+end }
+
 -- ------------------------------------------------------------------ fake clock
 local NOW = 100
 os.clock = function() return NOW end   -- deterministic throttling (detection, items, saving)
@@ -219,6 +227,7 @@ local function new_tempest(saved)
 		command = function(name, fn) T.commands[name] = fn end,
 		queue = function(fn) T.queued[#T.queued + 1] = fn end,
 		local_player = function() return T.player end,
+		engine = function() return MOCK.engine end,
 	}
 	function T.press(spec)
 		for _, k in pairs(T.keys) do
@@ -255,43 +264,165 @@ local function obj(class, t, fixed_ptr)
 	local p = fixed_ptr or next_ptr
 	t.class = function() return { name = function() return class end } end
 	t.ptr = function() return p end
-	t.is_a = function(_, c) return c == class or c == t._is_a end
+	t.is_a = function(_, c)
+		if c == class or c == t._is_a then return true end
+		for _, x in ipairs(t._parents or {}) do
+			if x == c then return true end
+		end
+		return false
+	end
 	return t
 end
 
--- Translator: what UIMoviePlayer.usc_TranslateMsgId would answer, with the game's markup.
-local function movie(lang_prefix, extra)
+-- The HUD's Scaleform movie (champion select reads its UI data manager). Names no longer come from
+-- it: they come from the Lang files (lang mock below).
+local function movie(_, extra)
 	local m = obj("TgClient.TgClientHUDMovie", extra or {})
 	m._is_a = "TgClient.UIMoviePlayer"
-	m.usc_TranslateMsgId = function(_, id)
-		if id % 97 == 0 then return "" end   -- some ids have no text: the mod falls back
-		return "<font color=\"#FFD266\">" .. lang_prefix .. id .. "</font> {25}%"
-	end
 	return m
 end
 
-local function inv_chain(entries)
-	local head
-	for i = #entries, 1, -1 do
-		head = { m_InventoryData = { nItemId = entries[i][1], nLevel = entries[i][2] }, Inventory = head }
+-- ------------------------------------------------------------------ Game Data API mocks (1.1.0)
+-- assembly answers with the rows of engine/tests/game_ids.lua (ids only, written by export_lua.py);
+-- rows are strict like the real ones: a field name no row of the table has raises an error, a field
+-- this row lacks is nil. lang answers "<prefix><id>" with the game's markup in each installed
+-- language (no Lang_ITA.dat, like the 8.1 install); some ids have no text. GAME.lang is the language
+-- the client runs in, as the engine answers it (Object.GetLanguage on tempest.engine()); GAME.arg is
+-- what lang.language() answers: a -language= start argument, else INT. A Steam client in French runs
+-- in FRA with no argument (the 0.7.0 match test): GAME.lang = "FRA", GAME.arg = "INT".
+local IDS = dofile("engine/tests/game_ids.lua")
+local GAME = { lang = "INT", arg = "INT", loads = {}, unloads = {}, finds = 0, missing = {}, fail = nil,
+	installed = { INT = "EN", FRA = "FR", DEU = "DE", ESL = "ES", RUS = "RU", CHN = "ZH", JPN = "名前", KOR = "KO" } }
+local function strict_rows(rows)
+	local known = {}
+	for _, r in ipairs(rows) do
+		for k in pairs(r) do known[k] = true end
 	end
-	return head
+	local mt = { __index = function(_, k) if not known[k] then error("no field " .. tostring(k), 2) end end }
+	for _, r in ipairs(rows) do
+		for _, v in pairs(r) do
+			if type(v) == "table" then strict_rows(v) end
+		end
+		setmetatable(r, mt)
+	end
 end
+for _, set in ipairs({ "BOTS", "DEVICES", "ITEMS" }) do strict_rows(IDS[set]) end
+_G.assembly = {
+	load = function()
+		if GAME.fail then return nil, GAME.fail end
+		return true
+	end,
+	unload = function() GAME.asm_unloaded = true end,
+	find = function(set, field, value)
+		GAME.finds = GAME.finds + 1
+		for _, r in ipairs(IDS[set] or error("no table " .. tostring(set))) do
+			if r[field] == value then return r end
+		end
+		return nil
+	end,
+}
+MOCK.engine = obj("Engine.GameEngine", { GetLanguage = function() return GAME.lang end })
+_G.lang = {
+	language = function() return GAME.arg end,
+	load = function(ext)
+		ext = ext or GAME.arg
+		if not GAME.installed[ext] then return nil, "no Lang_" .. ext .. ".dat" end
+		GAME.loads[#GAME.loads + 1] = ext
+		return true
+	end,
+	unload = function(ext) GAME.unloads[#GAME.unloads + 1] = ext or GAME.arg end,
+	message = function(id, ext)
+		local prefix = GAME.installed[ext or GAME.arg]
+		if not prefix or id % 97 == 0 or GAME.missing[id] then return nil end
+		return "<font color=\"#FFD266\">" .. prefix .. id .. "</font> {25}%"
+	end,
+	find = function(field, value)
+		assert(field == "NAME", field)
+		local id = IDS.lang_names[value]
+		return id and { MSG_ID = id, NAME = value } or nil
+	end,
+}
+-- The text the lang mock gives for an id in a language (nil when it has none), as sc_text cleans it.
+local function game_text(prefix, id)
+	return id and id % 97 ~= 0 and (prefix .. id .. " 25%") or nil
+end
+local EN   -- EN(name): the champion's English name from the game (set once DATA is filled)
 
 local DATA = require("lib.sc_data")
+local GameData = require("lib.sc_gamedata")
+section("sc_gamedata: roles, message ids and shop ranks from the game data")
+do
+	check(DATA.champions[1].role == nil and DATA.items.Haven.name_msg == nil and DATA.max_rank == nil,
+		"sc_data.lua ships no role, message id or rank count")
+	GAME.fail = "missing file"
+	local ok, why = GameData.load(DATA)
+	check(ok == nil and why == "assembly.dat: missing file", "no game data: nil and why (" .. tostring(why) .. ")")
+	GAME.fail = nil
+	ok, why = GameData.load(DATA)
+	check(ok == true and GAME.asm_unloaded, "game data read, then the file is freed (" .. tostring(why) .. ")")
+	local roles_ok, abil_ok = true, true
+	for _, c in ipairs(DATA.champions) do
+		if c.role ~= IDS.roles[c.name] or not c.name_msg then roles_ok = false end
+		for _, a in ipairs(c.abilities) do
+			if not a.name_msg then abil_ok = false end
+		end
+	end
+	check(roles_ok, "every champion's role from its Roles tag, as the engine data has it")
+	check(abil_ok, "every ability named through its slot's device")
+	local items_ok = true
+	for _, k in ipairs(DATA.item_order) do
+		local it = DATA.items[k]
+		if not (it.name_msg and it.desc_msg and it.ranks == 3) then items_ok = false end
+	end
+	check(items_ok and DATA.max_rank == 3, "items: name, description, 3 ranks from the device modes")
+	check(DATA.role_msg.Frontline == IDS.lang_names.PALADINS_ARCHETYPE_TANK and DATA.category_msg.Weapon ~= nil,
+		"role and category labels found by message name")
+	check(not pcall(function() return IDS.BOTS[1].NAME_MSGID end), "mock rows are strict: a mistyped field raises")
+	-- a champion the game data does not have: all or nothing
+	local lost = { champions = { { name = "Nobody", bot_id = 1, abilities = {} } }, items = {}, item_order = {} }
+	ok, why = GameData.load(lost)
+	check(ok == nil and why:find("Nobody", 1, true), "an unknown champion: nil and why (" .. tostring(why) .. ")")
+end
 local function champ(name)
 	for _, c in ipairs(DATA.champions) do
 		if c.name == name then return c end
 	end
 	error("no champion " .. name)
 end
+EN = function(name) return game_text("EN", champ(name).name_msg) or name end
 
-local function pawn_of(name, items)
+-- One TgPawn_* class per champion in the game (sc_data.lua does not list them: the bot id is asked).
+local function pawn_class(name)
+	return "TgPawn_" .. (champ(name).name:gsub("[^%w]", ""))
+end
+
+-- GetBotId is the champion's bot id; GetArchetypeBotId is the role archetype (LiveCheck log: 2573 Front
+-- Line ... 2576 Flank), never a champion.
+local ARCHETYPE_BOT = { Frontline = 2573, Damage = 2574, Support = 2575, Flank = 2576 }
+local function pawn_of(name)
 	local c = champ(name)
-	return obj(c.pawn, {
-		GetArchetypeBotId = function() return c.bot_id end,
-		InvManager = items and { InventoryChain = inv_chain(items) } or nil,
+	return obj(pawn_class(name), {
+		GetBotId = function() return c.bot_id end,
+		GetArchetypeBotId = function() return ARCHETYPE_BOT[c.role] end,
+		_parents = { "TgGame.TgPawn_Character", "TgGame.TgPawn" },   -- every champion pawn in 8.1
 	})
+end
+
+-- The items of a player as TgRepInfo_Player replicates them: the scoreboard slots (r_PlayerDevices:
+-- deck cards, then the shop items at Level 0) and the shop items with their rank (r_TempItems).
+-- entries = { { item id, nRank }, ... }
+local function give_items(pri, entries)
+	local slots, temp = { { CurrentDeviceId = 24554, Level = 5 }, { CurrentDeviceId = 24622, Level = 0 } }, {}
+	for _, e in ipairs(entries) do
+		slots[#slots + 1] = { CurrentDeviceId = e[1], Level = 0 }
+		temp[#temp + 1] = { nDevId = e[1], nRank = e[2] }
+	end
+	pri.r_PlayerDevices, pri.r_TempItems = slots, temp
+	return pri
+end
+
+local function pri_items(entries)
+	return give_items(obj("TgGame.TgRepInfo_Player", {}), entries)
 end
 
 local function pri_of(name, tf, fixed_ptr)
@@ -312,15 +443,16 @@ end
 -- pc in a match: me + allies on team 1, enemies on team 2. `cs` = the roster kept by the HUD.
 local function match_pc(lang, prefix, me, allies, enemies, items, cs)
 	local my_pri = pri_of(me, 1)
+	if items then give_items(my_pri, items) end
 	local pris = { my_pri }
 	for _, n in ipairs(allies) do pris[#pris + 1] = pri_of(n, 1) end
 	for _, n in ipairs(enemies) do pris[#pris + 1] = pri_of(n, 2) end
-	local gri = obj("TgGame.TgGameReplicationInfo_Siege", { ElapsedTime = 420, bMatchIsOver = false, PRIArray = list(pris) })
+	local gri = obj("TgGame.TgRepInfo_Game_Payload", { ElapsedTime = 420, bMatchIsOver = false, PRIArray = list(pris) })
 	local wi = obj("Engine.WorldInfo", { GRI = gri, path = function() return "Siege_Frog.TheWorld:PersistentLevel" end })
 	local hud
 	if prefix or cs then hud = { m_pMovie = movie(prefix or "EN", { m_UIDataManager = cs }) } end
 	return {
-		WorldInfo = wi, Pawn = pawn_of(me, items), PlayerReplicationInfo = my_pri, myHUD = hud,
+		WorldInfo = wi, Pawn = my_pri.r_PawnOwner, PlayerReplicationInfo = my_pri, myHUD = hud,
 		GetLanguage = function() return lang end,
 	}
 end
@@ -393,43 +525,72 @@ _G.ui = new_ui()
 local T0 = new_tempest()
 _G.tempest = T0.api
 
-section("sc_text: names from the game")
+section("sc_text: names from the game's Lang files (lang API)")
 local Text = require("lib.sc_text")
 check(Text.clean("<font color=\"#fff\">Stuns</font> for {1.5}s") == "Stuns for 1.5s", "clean keeps words and values")
 check(Text.clean("{10|-1}s") == "10s", "clean keeps the first placeholder value")
+GAME.lang = "FRA"
 local TX = Text.new(DATA, PRED)
-T0.player = nil
-TX:refresh(NOW)
-check(TX:champion("Makoa") == "Makoa" and TX:item("Haven") == "Haven", "no player: internal names")
-check(TX:ui_lang() == nil and TX:all_texts() == nil, "no player: language unknown, no texts")
-T0.player = match_pc("FRA", "FR", "Makoa", {}, { "Lian" })
-NOW = NOW + 2
-TX:refresh(NOW)
+local loads0 = #GAME.loads
+check(TX.lang_code == "FRA" and TX:ui_lang() == "fr" and lang.language() == "INT",
+	"a French Steam client: the engine says FRA while lang.language() says INT -> fr")
+check(TX:champion("Makoa") == "Makoa" and TX:item("Haven") == "Haven" and #GAME.loads == loads0,
+	"no language shown yet: internal names, no Lang file read")
+TX:set_view("fr", false)
 local mk = champ("Makoa")
-check(TX:ui_lang() == "fr", "GetLanguage FRA -> fr")
-check(TX:champion("Makoa") == (mk.name_msg % 97 == 0 and "Makoa" or ("FR" .. mk.name_msg .. " 25%")),
-	"champion name from usc_TranslateMsgId: " .. tostring(TX:champion("Makoa")))
-check(TX:role("Frontline") ~= nil and TX:category("Defense") ~= nil, "role and category names from the game")
-local v0 = TX.version
-T0.player.GetLanguage = function() return "JPN" end
-NOW = NOW + 2
-TX:refresh(NOW)
-check(TX:ui_lang() == "ja" and TX.version > v0, "language change bumps the version")
+check(TX:champion("Makoa") == (game_text("FR", mk.name_msg) or "Makoa"),
+	"champion name from lang.message: " .. tostring(TX:champion("Makoa")))
+check(TX:role("Frontline") == game_text("FR", DATA.role_msg.Frontline) and TX:category("Defense") ~= nil,
+	"role and category names from the game")
+check(GAME.loads[#GAME.loads] == "FRA" and GAME.unloads[#GAME.unloads] == "FRA" and #GAME.loads == loads0 + 1,
+	"the French Lang file is read once, then freed")
+for _ = 1, 3 do
+	TX:champion("Lian")
+	TX:item_desc("Haven")
+end
+check(#GAME.loads == loads0 + 1, "texts are kept: no file read while the panel draws")
 local texts = TX:all_texts()
-check(type(texts) == "table" and #texts > 100, "all_texts covers champions, abilities and items")
+check(#texts > 100 and TX.n_texts == #texts, "all_texts covers champions, abilities and items")
+-- the engine sets its language after the script has loaded: picked up within a second
+GAME.lang = "INT"
+local TXl = Text.new(DATA, PRED)
+TXl:set_view(TXl:ui_lang(), true)
+check(TXl:ui_lang() == "en" and TXl:names_ext() == "INT", "engine still in INT at load: English")
+GAME.lang = "FRA"
+local vl = TXl.version
+TXl:refresh(NOW)
+TXl:set_view("en", true)
+check(TXl.lang_code == "FRA" and TXl:ui_lang() == "fr" and TXl.version > vl and TXl:names_ext() == "FRA",
+	"a later FRA: Auto follows, names in the client's language are read again")
+local calls = 0
+MOCK.engine.GetLanguage = function() calls = calls + 1 return GAME.lang end
+TXl:refresh(NOW + 0.5)
+check(calls == 0, "the language is looked at once per second at most")
+MOCK.engine.GetLanguage = function() return GAME.lang end
+-- no engine answer (no engine object, an empty string): lang.language()
+local saved_engine = MOCK.engine
+MOCK.engine = nil
+GAME.arg = "DEU"
+check(Text.new(DATA, PRED).lang_code == "DEU", "no engine: lang.language()")
+MOCK.engine = obj("Engine.GameEngine", { GetLanguage = function() return "" end })
+check(Text.new(DATA, PRED).lang_code == "DEU", "an empty engine answer: lang.language()")
+MOCK.engine, GAME.arg, GAME.lang = saved_engine, "INT", "INT"
 
-section("sc_player: owned items by reflection")
+section("sc_player: owned items by reflection (TgRepInfo_Player)")
 local Player = require("lib.sc_player")
 local PL = Player.new(DATA)
 local haven, wrecker = DATA.items["Haven"], DATA.items["Wrecker"]
-local pawn = pawn_of("Makoa", { { haven.item_id, 2 }, { 999999, 3 }, { wrecker.item_id, 7 }, { haven.item_id, 1 } })
-local owned = PL:from_inventory(pawn)
-check(owned and owned.Haven == 2 and owned.Wrecker == 3, "inventory chain: ranks, unknown ids ignored, clamp to III")
-check(PL:from_inventory(pawn_of("Makoa")) == nil, "no InvManager -> nil")
-check(PL:from_devices({ r_PlayerDevices = { { CurrentDeviceId = haven.item_id, Level = 1 } } }) == nil,
-	"a single struct view is not a slot list")
-local devs = PL:from_devices({ r_PlayerDevices = { { CurrentDeviceId = haven.item_id, Level = 2 }, { CurrentDeviceId = 0 } } })
-check(devs and devs.Haven == 1, "device slots list: which items; their Level (the cards' level) is not a rank")
+local owned, src = PL:from_devices(pri_items({ { haven.item_id, 2 }, { 999999, 3 }, { wrecker.item_id, 7 }, { haven.item_id, 1 } }))
+check(owned and owned.Haven == 2 and owned.Wrecker == 3 and src == "PRI.r_PlayerDevices + r_TempItems",
+	"slots + shop ranks: unknown ids ignored, the highest rank of an item kept, clamp to III")
+check(Player.new(DATA):from_devices({ r_PlayerDevices = { { CurrentDeviceId = haven.item_id }, { CurrentDeviceId = 0 } } }) == nil,
+	"a plain table is not a TgRepInfo_Player: never read")
+check(Player.new(DATA):from_devices(obj("TgGame.TgRepInfo_Player",
+	{ r_PlayerDevices = { { CurrentDeviceId = haven.item_id, Level = 1 } } })) == nil, "a single struct view is not a slot list")
+local devs, src2 = Player.new(DATA):from_devices(obj("TgGame.TgRepInfo_Player",
+	{ r_PlayerDevices = { { CurrentDeviceId = haven.item_id, Level = 2 }, { CurrentDeviceId = 0 } } }))
+check(devs and devs.Haven == 1 and src2 == "PRI.r_PlayerDevices",
+	"slots alone: which items; their Level (the cards' level) is not a rank")
 local ids_ok = true
 for name, it in pairs(DATA.items) do
 	if PL.by_id[it.item_id] ~= name then ids_ok = false end
@@ -444,20 +605,19 @@ local Detect = require("lib.sc_detect")
 local DET = Detect.new(PRED)
 T0.player = match_pc("INT", nil, "Lian", { "Inara", "Grohk" }, { "Makoa", "Androxus", "Viktor" })
 local st = DET:read()
-check(st.status == "match" and st.me == "Lian", "match: my champion from GetArchetypeBotId")
+check(st.status == "match" and st.me == "Lian", "match: my champion from GetBotId (GetArchetypeBotId is the role)")
 check(same_list(st.enemies, { "Androxus", "Makoa", "Viktor" }), "enemies by GetTaskForceNumber: " .. table.concat(st.enemies, ","))
 check(same_list(st.allies, { "Grohk", "Inara" }), "allies by GetTaskForceNumber")
 check(st.mode == "siege" and st.phase ~= nil, "mode from the GRI class, phase from ElapsedTime")
--- bot id unavailable: the pawn class is the fallback; no team number: IsFriendlyWithLocalPawn
+-- no team number (255): IsFriendlyWithLocalPawn
 local p2 = pawn_of("Makoa")
-p2.GetArchetypeBotId = function() error("not exposed") end
 p2.IsFriendlyWithLocalPawn = function() return false end
 local DET2 = Detect.new(PRED)
 T0.player = match_pc("INT", nil, "Lian", {}, {})
 table.insert(T0.player.WorldInfo.GRI.PRIArray, obj("TgGame.TgRepInfo_Player",
 	{ r_PawnOwner = p2, GetTaskForceNumber = function() return 255 end }))
 st = DET2:read()
-check(same_list(st.enemies, { "Makoa" }), "pawn class fallback + IsFriendlyWithLocalPawn")
+check(same_list(st.enemies, { "Makoa" }), "no team number: IsFriendlyWithLocalPawn")
 T0.player = lobby_pc("INT", "EN", "Cassie", { "Inara" })
 st = DET:read()
 check(st.status == "champ_select" and st.me == "Cassie" and st.allies[1] == "Inara", "champion select from MatchMembers")
@@ -467,47 +627,22 @@ T0.player = nil
 check(DET:read().status == "no_player", "no player")
 
 -- ------------------------------------------------------------------ 2b. edge cases of the game queries
-section("edge cases: late or empty game answers (sc_text)")
-local asked, answers = {}, {}
-local function scripted_hud()
-	local m = obj("TgClient.TgClientHUDMovie", {})
-	m._is_a = "TgClient.UIMoviePlayer"
-	m.usc_TranslateMsgId = function(_, id)
-		asked[id] = (asked[id] or 0) + 1
-		return answers[id] or ""
-	end
-	return { m_pMovie = m }
-end
-T0.player = { myHUD = scripted_hud(), GetLanguage = function() return "FRA" end }
-NOW = NOW + 2
+section("edge cases: a language without Lang file, ids without text (sc_text)")
+GAME.lang = "INT"
 local TXr = Text.new(DATA, PRED)
-TXr:refresh(NOW)
-local mk_id = mk.name_msg
-check(TXr:champion("Makoa") == "Makoa" and asked[mk_id] == 1, "empty answer: fallback name, asked once")
-check(TXr:champion("Makoa") == "Makoa" and asked[mk_id] == 1, "not asked again before the retry delay")
-answers[mk_id] = "Makoa FR"
-local v1 = TXr.version
-NOW = NOW + Text.RETRY + 0.1
-check(TXr:champion("Makoa") == "Makoa FR" and TXr.version > v1, "a late answer is picked up and bumps the version")
-local haven_id = DATA.items.Haven.name_msg
-for _ = 1, Text.MAX_MISSES + 2 do
-	TXr:item("Haven")
-	NOW = NOW + Text.RETRY + 0.1
-end
-check(asked[haven_id] == Text.MAX_MISSES, "an id with no text is asked at most MAX_MISSES times")
-T0.player.myHUD = nil
-NOW = NOW + 2
-TXr:refresh(NOW)
-check(not TXr.has_movie and TXr:champion("Makoa") == "Makoa FR", "map change (no HUD): cached names stay")
-T0.player.myHUD = scripted_hud()
-NOW = NOW + 2
-TXr:refresh(NOW)
+TXr:set_view("it", false)
+check(TXr:champion("Makoa") == "Makoa" and TXr:item_desc("Haven") == nil and TXr:role("Frontline") == nil,
+	"Italian UI (no Lang_ITA.dat in 8.1): internal names, the mod's words, no description")
+check(TXr:names_ext() == nil and #TXr:all_texts() == 0, "names fall back to the mod's keys, no game text")
+local loads1 = #GAME.loads
+TXr:champion("Lian")
 TXr:item("Haven")
-check(asked[haven_id] == Text.MAX_MISSES + 1, "a new HUD asks again for what the last one could not translate")
-T0.player.GetLanguage = function() return "DEU" end
-NOW = NOW + 2
-TXr:refresh(NOW)
-check(TXr:ui_lang() == "de" and TXr.n_texts == 0, "a language change forgets the texts of the old language")
+check(#GAME.loads == loads1, "a missing Lang file is not asked again")
+GAME.missing[DATA.items.Haven.name_msg] = true
+TXr:set_view("de", false)
+check(TXr:item("Haven") == "Haven" and TXr:item("Wrecker") == (game_text("DE", DATA.items.Wrecker.name_msg) or "Wrecker"),
+	"an id without text in the file: the internal name for that one only")
+GAME.missing = {}
 check(Text.clean("Line<br/>two &amp; three<BR>four") == "Line two & three four", "clean: line breaks and entities")
 check(Text.clean("&bogus; ok") == "&bogus; ok", "clean: an unknown entity is kept")
 check(Text.clean("<b></b>  ") == nil, "clean: markup only = no text")
@@ -518,9 +653,9 @@ local TF = new_tempest()
 _G.tempest = TF.api
 local Fonts = require("lib.sc_fonts")
 local Lng = require("lib.sc_lang")
-local stub = { has_movie = false, n_texts = 0 }
+local stub = { n_texts = 0 }
 function stub:ui_lang() return "ja" end
-function stub:all_texts() return self.has_movie and { "名前" } or nil end
+function stub:all_texts() return self.n_texts > 0 and { "名前" } or {} end
 local stuck = { ja = { state = "queued", body = {}, bold = {}, group = "ja", ui_lang = "ja", key = "ja" } }
 local FN = Fonts.new(Lng, stub, stuck, function() end)
 check(stuck.ja.state == "pending", "a load queued before a hot reload starts again")
@@ -545,7 +680,7 @@ run_queue()
 NOW = NOW + 0.1
 fset = FR2:tick(NOW, "ja")
 check(fset.state == "ready" and #MOCK.fonts_added > 0, "queued load, then ready on the next frame")
-stub.has_movie, stub.n_texts = true, 40
+stub.n_texts = 40   -- names switched to the game's language: more game texts on screen
 NOW = NOW + 1
 check(FR2:tick(NOW, "ja") == fset and store2.ja == fset, "no rebuild right after a build")
 local rebuilds = 0
@@ -568,7 +703,7 @@ for _ = 1, 4 do
 		FR2:tick(NOW, "ja")
 	end
 end
-check(rebuilds == 2, "late game names rebuild a CJK set at most twice (got " .. rebuilds .. ")")
+check(rebuilds == 2, "more game names on screen rebuild a CJK set at most twice (got " .. rebuilds .. ")")
 _G.ui = new_ui()
 _G.tempest = T0.api
 
@@ -618,40 +753,40 @@ T0.player = lobby_pc("INT", "EN", "Makoa", {})
 NOW = NOW + 2
 check(not PL2:poll(NOW).available, "another map without a pawn: nothing kept from the last one")
 
-section("names in one language (sc_text set_view)")
+section("names in the shown language (sc_text set_view)")
+GAME.lang = "FRA"
 local TXv = Text.new(DATA, PRED)
-T0.player = match_pc("FRA", "FR", "Makoa", {}, { "Lian" })
-NOW = NOW + 2
-TXv:refresh(NOW)
+TXv:set_view("fr", false)
 local mk_fr = TXv:champion("Makoa")
-check(mk_fr ~= "Makoa", "no view set yet: the game's name")
+check(mk_fr == (game_text("FR", mk.name_msg) or "Makoa"), "French game, French UI: the game's French names")
 local vv = TXv.version
 TXv:set_view("en", false)
 check(TXv.version > vv, "a view change bumps the version (layouts and lists are redone)")
-check(TXv:champion("Makoa") == "Makoa" and TXv:item("Haven") == "Haven",
-	"French game, English UI: internal English names, no French")
-check(TXv:role("Frontline") == nil and TXv:category("Defense") == nil and TXv:item_desc("Haven") == nil,
-	"French game, English UI: roles / categories use the mod's words, no French description")
-check(TXv:ability(mk.abilities[1]) == nil, "French game, English UI: abilities use the generic words")
-TXv:set_view("fr", false)
-check(TXv:champion("Makoa") == mk_fr, "French game, French UI: the game's names")
+local haven = DATA.items.Haven
+check(TXv:champion("Makoa") == (game_text("EN", mk.name_msg) or "Makoa")
+	and TXv:item("Haven") == (game_text("EN", haven.name_msg) or "Haven"),
+	"French game, English UI: the game's English names (Lang_INT), no French")
+check(TXv:role("Frontline") == game_text("EN", DATA.role_msg.Frontline)
+	and TXv:item_desc("Haven") == game_text("EN", haven.desc_msg),
+	"French game, English UI: roles and descriptions in English, from the game")
+check(TXv:ability(mk.abilities[1]) == game_text("EN", mk.abilities[1].name_msg), "abilities named in English too")
 TXv:set_view("en", true)
-check(TXv:champion("Makoa") == mk_fr, "game_names on: the game's champion names in any UI language")
-check(TXv:role("Frontline") == nil and TXv:category("Defense") == nil and TXv:item_desc("Haven") == nil,
-	"game_names on: roles, categories and descriptions still follow the UI language (no French sentence)")
-T0.player.GetLanguage = function() return "ESP" end
-NOW = NOW + 2
-TXv:refresh(NOW)
-TXv:set_view("en", false)
-check(TXv:champion("Makoa") == "Makoa", "a game language the mod has no UI for (ESP): English names with the English UI")
-check(type(TXv:all_texts()) == "table", "all game texts are still read (CJK font glyphs)")
+check(TXv:champion("Makoa") == mk_fr and TXv:names_ext() == "FRA", "game_names on: names in the game's language")
+check(TXv:role("Frontline") == game_text("EN", DATA.role_msg.Frontline)
+	and TXv:item_desc("Haven") == game_text("EN", haven.desc_msg),
+	"game_names on: roles and descriptions still follow the UI language (no French sentence)")
+GAME.lang = "ESL"
+local TXs = Text.new(DATA, PRED)
+TXs:set_view(TXs:ui_lang(), false)
+check(TXs:ui_lang() == "en" and TXs:champion("Makoa") == (game_text("EN", mk.name_msg) or "Makoa"),
+	"a game language the mod has no UI for (ESL): English UI, English names")
+TXs:set_view("en", true)
+check(TXs:champion("Makoa") == (game_text("ES", mk.name_msg) or "Makoa"), "ESL with game_names: Spanish names")
+GAME.lang = "INT"
 
 section("names inside the mod's sentences come from the game (sc_view placeholders)")
 local LV = require("lib.sc_lang")
 local Vw = require("lib.sc_view").new({ t = LV.t, L = LV, TX = TXv, D = DATA, PRED = PRED })
-T0.player = match_pc("FRA", "FR", "Makoa", {}, { "Lian" })
-NOW = NOW + 2
-TXv:refresh(NOW)
 LV.set("fr")
 TXv:set_view("fr", false)
 local wr_fr, inara_fr = TXv:item("Wrecker"), TXv:champion("Inara")   -- mock names carry a '%' too
@@ -663,11 +798,12 @@ check(fr_text:find(inara_fr, 1, true) ~= nil, "the Wrecker note names the champi
 LV.set("en")
 TXv:set_view("en", false)
 local en_text = Vw:why_text("Wrecker", why, true)
-check(en_text:find("Wrecker", 1, true) and en_text:find("Inara", 1, true) and not en_text:find(wr_fr, 1, true),
-	"English UI on a French game: the English names, no French name inside an English sentence")
+local wr_en, inara_en = TXv:item("Wrecker"), TXv:champion("Inara")
+check(en_text:find(wr_en, 1, true) and en_text:find(inara_en, 1, true) and not en_text:find(wr_fr, 1, true),
+	"English UI on a French game: the game's English names, no French name inside an English sentence")
 check(not en_text:find("%s", 1, true) and not fr_text:find("%s", 1, true), "every placeholder is filled")
-check(Vw:reason_text({ key = "deployables", args = "2500" }) == LV.t("r_deployables", "2500"),
-	"deployables reason: the biggest deployable's HP, no object name")
+check(Vw:reason_text({ key = "deployables" }) == LV.t("r_deployables") and not LV.t("r_shield"):find("%d"),
+	"deployables and shield reasons: no health number (the mod ships no game stats), no object name")
 
 section("quick picks, loading, training (sc_detect)")
 local D5 = Detect.new(PRED)
@@ -722,83 +858,76 @@ local o3 = PRED:predict("Io", { "Makoa", "Dredge", "Evie", "Furia", "Androxus" }
 	{ Hoard = 1, Nimble = 1, Chronos = 1 })
 check(not o3.build[5].blocked, "3 items owned: the optional 5th can still be bought")
 
-section("item ranks (game data) and how the game counts them (sc_player)")
-local all3 = true
-for _, it in pairs(DATA.items) do
-	if it.ranks ~= 3 then all3 = false end
+section("item ranks: one max rank for the shop, how the game counts nRank (sc_player)")
+check(DATA.max_rank == 3, "every 8.1 shop item has ranks I-III (from the game data's device modes)")
+local no_stats = true
+local SHIPPED = dofile("src/scripts/lib/sc_data.lua")
+for _, it in pairs(SHIPPED.items) do
+	if it.cost or it.ranks then no_stats = false end
 end
-check(all3, "every 8.1 shop item has 3 ranks in the game data (device modes)")
-DATA.items.Nimble.ranks = 2   -- an item with 2 ranks: everything follows the data
-local own2 = Predictor.clean_owned(DATA, { Nimble = 3, Haven = 5 })
-check(own2.Nimble == 2 and own2.Haven == 3, "owned ranks are capped at each item's max rank")
+for _, c in ipairs(SHIPPED.champions) do
+	if c.hp or c.pawn then no_stats = false end
+	for _, r in ipairs(c.recs) do
+		if r.args then no_stats = false end
+	end
+	for _, a in ipairs(c.abilities) do
+		if a.device_id then no_stats = false end
+	end
+end
+check(no_stats, "sc_data.lua ships no game stats: no health, shield health, cost, rank count, pawn class, device id")
+DATA.max_rank = 2   -- a shop with 2 ranks: everything follows the data
+local own2 = Predictor.clean_owned(DATA, { Nimble = 3, Haven = 1 })
+check(own2.Nimble == 2 and own2.Haven == 1, "owned ranks are capped at the max rank")
 local r2 = PRED:predict("Lian", { "Makoa", "Fernando" }, "mid", nil, nil, { Nimble = 3 })
-local nimble_ok = true
+local cap_ok = true
 for _, b in ipairs(r2.build) do
-	if b.item == "Nimble" and (b.rank > 2 or b.target > 2) then nimble_ok = false end
+	if b.rank > 2 or b.target > 2 then cap_ok = false end
 end
 for _, it in ipairs(r2.items) do
-	if it.item == "Nimble" and it.suggested_level > 2 then nimble_ok = false end
+	if it.suggested_level > 2 then cap_ok = false end
 end
-check(nimble_ok, "advised rank and owned rank never exceed the item's max rank")
-local PLr = Player.new(DATA)
-local o = PLr:from_inventory(pawn_of("Makoa", { { DATA.items.Nimble.item_id, 7 } }))
-check(o.Nimble == 2, "live rank capped at the item's max rank")
-DATA.items.Nimble.ranks = 3
+check(cap_ok, "advised rank and owned rank never exceed the max rank")
+local o = Player.new(DATA):from_devices(pri_items({ { DATA.items.Nimble.item_id, 7 } }))
+check(o.Nimble == 2, "live rank capped at the max rank")
+DATA.max_rank = 3
 local PL0 = Player.new(DATA)
-o = PL0:from_inventory(pawn_of("Makoa", { { haven.item_id, 0 }, { wrecker.item_id, 2 } }))
-check(PL0.bases.inv == 0 and o.Haven == 1 and o.Wrecker == 3, "a level 0 means the game counts from 0: 0 = I, 2 = III")
-o = PL0:from_inventory(pawn_of("Makoa", { { haven.item_id, 1 } }))
+o = PL0:from_devices(pri_items({ { haven.item_id, 0 }, { wrecker.item_id, 2 } }))
+check(PL0.base == 0 and o.Haven == 1 and o.Wrecker == 3, "an nRank 0 means the game counts from 0: 0 = I, 2 = III")
+o = PL0:from_devices(pri_items({ { haven.item_id, 1 } }))
 check(o.Haven == 2, "the counting learnt stays for the session")
 local PL1 = Player.new(DATA)
-o = PL1:from_inventory(pawn_of("Makoa", { { haven.item_id, 3 } }))
-check(PL1.bases.inv == 1 and o.Haven == 3, "a level equal to the max rank means the game counts from 1")
+o = PL1:from_devices(pri_items({ { haven.item_id, 3 } }))
+check(PL1.base == 1 and o.Haven == 3, "an nRank equal to the max rank means the game counts from 1")
 local PLn = Player.new(DATA)
-o = PLn:from_inventory(pawn_of("Makoa", { { haven.item_id, 2 } }))
-check(PLn.bases.inv == nil and o.Haven == 2, "nothing conclusive: counts from 1")
-local dev_pawn = pawn_of("Makoa")
-dev_pawn.InvManager = { InventoryChain = { m_InventoryData = { nItemId = haven.item_id }, r_nDeviceLevel = 2 } }
-o = Player.new(DATA):from_inventory(dev_pawn)
-check(o.Haven == 2, "no nLevel: the device's replicated r_nDeviceLevel is read")
+o = PLn:from_devices(pri_items({ { haven.item_id, 2 } }))
+check(PLn.base == nil and o.Haven == 2, "nothing conclusive: counts from 1")
+local PLsold = Player.new(DATA)
+local pri_sold = pri_items({ { haven.item_id, 2 } })
+table.insert(pri_sold.r_TempItems, { nDevId = wrecker.item_id, nRank = 0 })   -- sold: still listed, gone from the slots
+o = PLsold:from_devices(pri_sold)
+check(PLsold.base == nil and o.Haven == 2 and o.Wrecker == nil,
+	"a sold item left in r_TempItems: not owned, and its rank teaches nothing")
+local pri_nr = pri_items({ { haven.item_id, 1 } })
+pri_nr.r_TempItems[1].nRank = nil
+check(Player.new(DATA):from_devices(pri_nr).Haven == 1, "no nRank at all: the owned item is rank I")
 
 do
 section("live rank-ups: bought at rank I, upgraded to II and III (sc_player)")
--- The game's shape: m_InventoryData.nLevel is the purchase record and stays at the rank bought;
--- ChangeDeviceLevel raises the device's r_nDeviceLevel; r_TempItems[].nRank is the shop rank;
--- r_PlayerDevices[].Level stays at 0 for items (it is the deck cards' level).
+-- The game's shape: r_TempItems[].nRank is the shop rank; r_PlayerDevices[].Level stays at 0 for
+-- items (it is the deck cards' level).
 local res, hav, wre = DATA.items.Resilience, DATA.items.Haven, DATA.items.Wrecker
-local function owned_chain(dev_levels, inv_level)
-	local entries = {}
-	for _, e in ipairs(dev_levels) do entries[#entries + 1] = { e[1].item_id, inv_level } end
-	local head = inv_chain(entries)
-	local node, i = head, 1
-	while node do
-		node.r_nDeviceLevel = dev_levels[i][2]
-		node, i = node.Inventory, i + 1
-	end
-	return head
-end
 local function count(t)
 	local n = 0
 	for _ in pairs(t) do n = n + 1 end
 	return n
 end
-local function rank_up_run(label, base, with_dev, with_slots)
+local function rank_up_run(label, base)
 	local PLu = Player.new(DATA)
-	local pawn_u = pawn_of("Makoa", {})
-	local pri_u = { r_PlayerDevices = {} }
-	local ok = true
-	local nowu = 1000
+	local pri_u = obj("TgGame.TgRepInfo_Player", {})
+	local ok, nowu = true, 1000
 	for r = 1, 3 do
-		local raw = r - 1 + base
-		local devs = { { res, with_dev and raw or nil }, { hav, with_dev and base or nil }, { wre, with_dev and (2 + base) or nil } }
-		pawn_u.InvManager = { InventoryChain = owned_chain(devs, base) }   -- nLevel: the rank bought, never changes
-		if with_slots then
-			pri_u.r_PlayerDevices = { { CurrentDeviceId = res.item_id, Level = 0 }, { CurrentDeviceId = hav.item_id, Level = 0 },
-				{ CurrentDeviceId = wre.item_id, Level = 0 }, { CurrentDeviceId = 0 } }
-			pri_u.r_TempItems = { { nDevId = res.item_id, nRank = raw }, { nDevId = hav.item_id, nRank = base },
-				{ nDevId = wre.item_id, nRank = 2 + base }, { nDevId = 0, nRank = 0 } }
-		end
-		T0.player = { Pawn = pawn_u, PlayerReplicationInfo = pri_u, WorldInfo = { ptr = function() return 7 end } }
+		give_items(pri_u, { { res.item_id, r - 1 + base }, { hav.item_id, base }, { wre.item_id, 2 + base }, { 0, 0 } })
+		T0.player = { Pawn = pawn_of("Makoa"), PlayerReplicationInfo = pri_u, WorldInfo = { ptr = function() return 7 end } }
 		nowu = nowu + 1.1
 		local st_u, changed = PLu:poll(nowu)
 		if st_u.owned.Resilience ~= r or count(st_u.owned) ~= 3 or st_u.owned.Wrecker ~= 3 or st_u.owned.Haven ~= 1 then
@@ -808,19 +937,8 @@ local function rank_up_run(label, base, with_dev, with_slots)
 	end
 	check(ok, label)
 end
-rank_up_run("device level counting from 1 (1, 2, 3), nLevel stuck at 1: Resilience I -> II -> III, 3 items", 1, true, false)
-rank_up_run("device level counting from 0 (0, 1, 2), nLevel stuck at 0: Resilience I -> II -> III, 3 items", 0, true, false)
-rank_up_run("no device level, shop items' nRank (1, 2, 3), slots at Level 0: Resilience I -> II -> III", 1, false, true)
-rank_up_run("device level and shop items together: the same ranks, no double counting", 1, true, true)
--- a stale field never pulls a rank down; no level at all still means an owned item at rank I
-local PLs = Player.new(DATA)
-local stale = PLs:from_inventory(pawn_of("Makoa", {}), nil)
-check(stale == nil or next(stale) == nil, "an empty chain owns nothing")
-local p_st = pawn_of("Makoa", {})
-p_st.InvManager = { InventoryChain = { m_InventoryData = { nItemId = res.item_id, nLevel = 1 }, r_nDeviceLevel = 3 } }
-check(PLs:from_inventory(p_st).Resilience == 3, "nLevel 1 (purchase) and device level 3: rank III")
-p_st.InvManager = { InventoryChain = { m_InventoryData = { nItemId = res.item_id } } }
-check(Player.new(DATA):from_inventory(p_st).Resilience == 1, "no level field at all: the owned item is rank I")
+rank_up_run("nRank counting from 1 (1, 2, 3), slots at Level 0: Resilience I -> II -> III, 3 items", 1)
+rank_up_run("nRank counting from 0 (0, 1, 2): Resilience I -> II -> III, 3 items", 0)
 -- the plan follows: owned rank III means Resilience is done, and the other slots are planned
 local r1 = PRED:predict("Makoa", { "Lian", "Androxus" }, "mid", nil, nil, { Resilience = 1, Haven = 1, Wrecker = 3 })
 local r3 = PRED:predict("Makoa", { "Lian", "Androxus" }, "mid", nil, nil, { Resilience = 3, Haven = 1, Wrecker = 3 })
@@ -835,7 +953,7 @@ check(b1 and b1.rank == 1 and b3 and b3.rank == 3 and b3.target <= 3 and b3.stat
 
 end
 do
-section("no lookup of missing properties: siege pawns, lobby PRI, inventory objects")
+section("no lookup of missing properties: siege pawns, lobby PRI, struct entries")
 -- a game object that counts reads of the properties its class does not declare (Tempest logs each one)
 local function strict(class, parents, fields, missing)
 	local o = fields or {}
@@ -850,14 +968,15 @@ local function strict(class, parents, fields, missing)
 		end
 		return false
 	end
+	o.has = function(_, k) return rawget(o, k) ~= nil end   -- Object:has: the declared properties
 	return setmetatable(o, { __index = function(_, k) missing[k] = (missing[k] or 0) + 1 return nil end })
 end
--- 1. the Siege payload is not a champion: never asked for GetArchetypeBotId
+-- 1. the Siege payload is not a champion: never asked for its bot id
 local miss = {}
 local bot_calls = 0
 local cart = strict("TgPawn_SiegeEngine_CaptureAndPayload", { "TgGame.TgPawn" }, {}, miss)
 local new_champ = strict("TgPawn_NewChamp", { "TgGame.TgPawn_Character", "TgGame.TgPawn" },
-	{ GetArchetypeBotId = function() bot_calls = bot_calls + 1 return DATA.champions[1].bot_id end }, miss)
+	{ GetBotId = function() bot_calls = bot_calls + 1 return DATA.champions[1].bot_id end }, miss)
 local DETs = Detect.new(PRED)
 T0.player = match_pc("INT", nil, "Lian", { "Inara" }, { "Makoa" })
 table.insert(T0.player.WorldInfo.GRI.PRIArray, obj("TgGame.TgRepInfo_Player",
@@ -866,13 +985,19 @@ table.insert(T0.player.WorldInfo.GRI.PRIArray, obj("TgGame.TgRepInfo_Player",
 	{ r_PawnOwner = new_champ, GetTaskForceNumber = function() return 2 end }))
 local st_s
 for i = 1, 5 do st_s = DETs:read(NOW + i) end
-check((miss.GetArchetypeBotId or 0) == 0, "Siege payload pawn: GetArchetypeBotId never looked up (" ..
-	tostring(miss.GetArchetypeBotId) .. ")")
+check((miss.GetBotId or 0) == 0, "Siege payload pawn: GetBotId never looked up (" .. tostring(miss.GetBotId) .. ")")
 check(same_list(st_s.enemies, { "Makoa", DATA.champions[1].name }) or same_list(st_s.enemies, { DATA.champions[1].name, "Makoa" }),
-	"the payload is not an enemy; a character class the data does not list is found by its bot id")
+	"the payload is not an enemy; every champion pawn is found by its bot id")
 check(bot_calls == 1, "a pawn class is asked for its bot id once, then cached (" .. bot_calls .. " calls)")
-check(DETs:champ_of_pawn(strict("TgPawn_Flak", {}, {}, miss)) == "Flak" or DETs:champ_of_pawn(pawn_of("Makoa")) == "Makoa",
-	"champion pawns are known by their class, without a function call")
+-- a pawn being set up (or torn down) answers bot id 0: not cached, asked again
+local tries, ids = 0, { 0, champ("Makoa").bot_id }
+local late = obj("TgPawn_LateMakoa", { _parents = { "TgGame.TgPawn_Character", "TgGame.TgPawn" },
+	GetBotId = function() tries = tries + 1 return ids[math.min(tries, 2)] end })
+local l1, l2, l3 = DETs:champ_of_pawn(late), DETs:champ_of_pawn(late), DETs:champ_of_pawn(late)
+check(l1 == nil and l2 == "Makoa" and l3 == "Makoa" and tries == 2,
+	"bot id 0 while the pawn is set up: not cached, asked again, then the champion is cached (" .. tries .. " calls)")
+check(DETs:champ_of_pawn(nil) == nil and DETs:champ_of_pawn(42) == nil and DETs:champ_of_pawn({}) == nil,
+	"no pawn, a plain value or a struct: no champion, no error")
 
 -- 2. the lobby's PlayerReplicationInfo has no r_PlayerDevices: never asked
 local PLq = Player.new(DATA)
@@ -888,6 +1013,7 @@ check((miss.r_PlayerDevices or 0) == 0 and (miss.r_TempItems or 0) == 0,
 local reads = 0
 local match_pri = strict("TgRepInfo_Player", { "TgGame.TgRepInfo_Player" }, {}, miss)
 rawset(match_pri, "r_PlayerDevices", nil)
+rawset(match_pri, "has", function(_, k) return k == "r_PlayerDevices" end)   -- declared, served below
 setmetatable(match_pri, { __index = function(_, k)
 	if k == "r_PlayerDevices" then reads = reads + 1 return { CurrentDeviceId = 0 } end   -- one struct view
 	return nil
@@ -898,18 +1024,10 @@ for i = 1, 5 do
 end
 check(reads == 1, "slots that cannot be listed are read once per PRI class (" .. reads .. " reads)")
 
--- 3. inventory objects that are not devices: no device field read; devices: the level is read
+-- 3. the arrays' entries are structs (no has(), as in the LiveCheck log): their fields are read
+-- directly; the item line is written once per change, not at every read
 miss = {}
-local inv_obj = strict("TgInventoryObject_Device", { "TgGame.TgInventoryObject" },
-	{ m_InventoryData = { nItemId = DATA.items.Resilience.item_id, nLevel = 2 }, Inventory = false }, miss)
-local p_obj = pawn_of("Makoa", {})
-p_obj.InvManager = { InventoryChain = inv_obj }
-local o_obj = Player.new(DATA):from_inventory(p_obj)
-check(o_obj.Resilience == 2 and (miss.r_nDeviceLevel or 0) == 0 and (miss.CurrentFireMode or 0) == 0,
-	"not a TgDevice: r_nDeviceLevel / CurrentFireMode not looked up, the record's level is used")
-local dev_obj = strict("TgDevice_Resilience", { "TgGame.TgDevice", "TgGame.TgInventoryObject" },
-	{ m_InventoryData = { nItemId = DATA.items.Resilience.item_id, nLevel = 1 }, r_nDeviceLevel = 1, CurrentFireMode = 0, Inventory = false }, miss)
-p_obj.InvManager = { InventoryChain = dev_obj }
+local pri_d = strict("TgRepInfo_Player", { "TgGame.TgRepInfo_Player" }, {}, miss)
 local logged = {}
 local PLd = Player.new(DATA, function(fmt, ...)
 	local line = string.format(fmt, ...)
@@ -917,18 +1035,19 @@ local PLd = Player.new(DATA, function(fmt, ...)
 end)
 local ranks_seen = {}
 for r = 1, 3 do
-	rawset(dev_obj, "r_nDeviceLevel", r)   -- ChangeDeviceLevel; nLevel stays at 1
+	local arrs = give_items({}, { { DATA.items.Resilience.item_id, r } })
+	rawset(pri_d, "r_PlayerDevices", arrs.r_PlayerDevices)
+	rawset(pri_d, "r_TempItems", arrs.r_TempItems)
 	for k = 1, 3 do
-		T0.player = { Pawn = p_obj, PlayerReplicationInfo = match_pri, WorldInfo = { ptr = function() return 13 end } }
-		local st_d = PLd:poll(NOW + 40 + r * 10 + k * 1.1)
-		ranks_seen[r] = st_d.owned.Resilience
+		T0.player = { Pawn = pawn_of("Makoa"), PlayerReplicationInfo = pri_d, WorldInfo = { ptr = function() return 13 end } }
+		ranks_seen[r] = PLd:poll(NOW + 40 + r * 10 + k * 1.1).owned.Resilience
 	end
 end
 check(ranks_seen[1] == 1 and ranks_seen[2] == 2 and ranks_seen[3] == 3 and next(miss) == nil,
-	"TgDevice in the chain: Resilience I -> II -> III, no missing property read (" ..
+	"struct entries: Resilience I -> II -> III, no missing property read (" ..
 	tostring(ranks_seen[1]) .. tostring(ranks_seen[2]) .. tostring(ranks_seen[3]) .. " " .. tostring(next(miss)) .. ")")
-check(#logged == 3 and logged[3]:find("Resilience=3 (shop rank -, dev 3", 1, true) ~= nil,
-	"raw levels logged once per change, not at every read (" .. #logged .. " lines): " .. tostring(logged[#logged]))
+check(#logged == 3 and logged[3]:find("Resilience=3 (shop rank 3)", 1, true) ~= nil,
+	"raw values logged once per change, not at every read (" .. #logged .. " lines): " .. tostring(logged[#logged]))
 
 end
 do
@@ -936,7 +1055,7 @@ section("rank display: an arrow from the owned rank to the advised one, never a 
 local LVd = require("lib.sc_lang")
 LVd.set("en")
 local TXd = Text.new(DATA, PRED)
-TXd:set_view("en", false)
+TXd:set_view("it", false)   -- no Lang file: the item keys, so the labels read plainly
 local Vd = require("lib.sc_view").new({ t = LVd.t, L = LVd, TX = TXd, D = DATA, PRED = PRED })
 local AR = Vd.ARROW
 check(AR == " \226\134\146 ", "the arrow is U+2192 between spaces")
@@ -961,7 +1080,7 @@ check(Vd:slot_status({ status = "upgrade", rank = 1, target = 3 }) == LVd.t("sta
 
 end
 do
-section("item reader: why nothing is read, read errors, repeated purchases, describe()")
+section("item reader: why nothing is read, read errors, repeated purchases")
 local logs = {}
 local function logf(fmt, ...) logs[#logs + 1] = string.format(fmt, ...) end
 local function count_logs(pat)
@@ -982,21 +1101,14 @@ local wi7 = { ptr = function() return 77 end }
 step({ WorldInfo = wi7 })                                       -- lobby: no character
 step({ WorldInfo = wi7 })
 check(count_logs("no character") == 1, "no character: said once, not at every read")
-local bare = pawn_of("Makoa")                                   -- a character without inventory
+local bare = pawn_of("Makoa")                                   -- a character, no player info yet
 step({ Pawn = bare, WorldInfo = wi7 })
 step({ Pawn = bare, WorldInfo = wi7 })
-check(count_logs("has no inventory") == 1, "a character without inventory chain: said once")
+check(count_logs("lists no shop items") == 1, "a character whose player info lists no items: said once")
 -- repeated purchases and upgrades: buy Wrecker I, upgrade II, sell, buy again at I, upgrade to III,
--- buy Nimble on the way; every change is one line, the ranks always follow the device
+-- buy Nimble on the way; every change is one line, the ranks always follow the shop
 local wr, nb = DATA.items.Wrecker, DATA.items.Nimble
-local function chain_of(list)
-	local head = { m_InventoryData = { nItemId = 1, nLevel = 1 }, r_nDeviceLevel = 1 }   -- the weapon: not an item
-	for i = #list, 1, -1 do
-		head = { m_InventoryData = { nItemId = list[i][1].item_id, nLevel = 1 }, r_nDeviceLevel = list[i][2], Inventory = head }
-	end
-	return head
-end
-local pawn_w = pawn_of("Makoa", {})
+local pri_w = obj("TgGame.TgRepInfo_Player", {})
 local script = {
 	{ {}, nil, "nothing bought yet: items none" },
 	{ { { wr, 1 } }, { Wrecker = 1 }, "Wrecker bought" },
@@ -1010,10 +1122,12 @@ local script = {
 }
 local all_ok, lines_ok = true, true
 for i, sc in ipairs(script) do
-	pawn_w.InvManager = { InventoryChain = chain_of(sc[1]) }
+	local entries = {}
+	for j, e in ipairs(sc[1]) do entries[j] = { e[1].item_id, e[2] } end
+	give_items(pri_w, entries)
 	local before = count_logs("items [")
-	local st_w, changed = step({ Pawn = pawn_w, WorldInfo = wi7 })
-	step({ Pawn = pawn_w, WorldInfo = wi7 })                    -- a second read: nothing new
+	local st_w, changed = step({ Pawn = bare, PlayerReplicationInfo = pri_w, WorldInfo = wi7 })
+	step({ Pawn = bare, PlayerReplicationInfo = pri_w, WorldInfo = wi7 })   -- a second read: nothing new
 	local want = sc[2] or {}
 	for k, r in pairs(want) do
 		if st_w.owned[k] ~= r then all_ok = false end
@@ -1036,39 +1150,12 @@ local PLe = Player.new(DATA, logf)
 PLe.read = function() error("boom") end
 for i = 1, 4 do PLe:poll(tw + 10 + i * 1.1) end
 check(count_logs("read failed") == 1 and PLe.errors == 4, "a read error is logged once (errors still counted)")
--- describe(): the objects, ids and levels seen, without reading undeclared properties
-local miss_d = {}
-local function strict_d(class, parents, fields)
-	fields.class = function() return { name = function() return class end } end
-	fields.is_a = function(_, c)
-		if c == class then return true end
-		for _, x in ipairs(parents) do
-			if x == c then return true end
-		end
-		return false
-	end
-	return setmetatable(fields, { __index = function(_, k) miss_d[k] = true return nil end })
-end
-local weapon = strict_d("TgDevice_Weapon", { "TgGame.TgDevice", "TgGame.TgInventoryObject" },
-	{ m_InventoryData = { nItemId = 1 }, r_nDeviceLevel = 1, CurrentFireMode = 0, r_nDeviceId = 1, Inventory = false })
-local item_d = strict_d("TgDevice_Item", { "TgGame.TgDevice", "TgGame.TgInventoryObject" },
-	{ m_InventoryData = { nItemId = wr.item_id, nLevel = 1 }, r_nDeviceLevel = 2, CurrentFireMode = 1, r_nDeviceId = wr.item_id,
-		Inventory = weapon })
-local pawn_d = strict_d("TgPawn_Makoa", { "TgGame.TgPawn_Character" }, { InvManager = { InventoryChain = item_d } })
-local pri_d = strict_d("PlayerReplicationInfo", { "Engine.PlayerReplicationInfo" }, {})
-T0.player = { Pawn = pawn_d, PlayerReplicationInfo = pri_d, WorldInfo = wi7 }
-local lines = PLw:describe("match")
-local text = table.concat(lines, "\n")
-check(text:find("TgDevice_Item: item id " .. wr.item_id .. " (Wrecker), buy level 1, device level 2, mode 1", 1, true) ~= nil
-	and text:find("chain: 2 object(s)", 1, true) ~= nil, "describe(): each inventory object with its ids and levels")
-check(text:find("TgRepInfo_Player: false", 1, true) ~= nil and not text:find("scoreboard slots", 1, true),
-	"describe(): the lobby PRI is named, its slots are not asked")
-check(next(miss_d) == nil, "describe() reads no undeclared property")
-check(#lines < 24, "describe() is one short block (" .. #lines .. " lines)")
+check(Player.describe == nil and Player.from_inventory == nil,
+	"no diagnostic dump and no inventory-chain reader in the release (the PRI path is the one checked live)")
 end
 
 do
-section("a live 8.1 match: no inventory chain, slots for which items, r_TempItems for the rank")
+section("a live 8.1 match: slots for which items, r_TempItems for the rank")
 -- the shape the Match tab diagnostic showed in td_abyss_p: chain none; 49 slots with deck cards
 -- (one at level 5) and the shop items at level 0; the rank is in r_TempItems[].nRank
 local hoard, nimble = DATA.items.Hoard, DATA.items.Nimble
@@ -1091,7 +1178,6 @@ for _, base in ipairs({ 1, 0 }) do
 	local PLm = Player.new(DATA, function(fmt, ...) logs[#logs + 1] = string.format(fmt, ...) end)
 	local pri_m = obj("TgGame.TgRepInfo_Player", {})
 	local pawn_m = pawn_of("Io")
-	pawn_m.InvManager = obj("TgGame.TgInventoryManager_Player", {})   -- no InventoryChain on the client
 	local tm = NOW + 900 + base * 100
 	local function read_m(items, temp)
 		pri_m.r_PlayerDevices, pri_m.r_TempItems = slots_with(items), temp_with(temp)
@@ -1128,8 +1214,8 @@ for _, base in ipairs({ 1, 0 }) do
 	for _, l in ipairs(logs) do
 		if l:find("items [PRI]", 1, true) then last = l end
 	end
-	check(last:find("Nimble=3 (shop rank " .. (2 + base) .. ", dev -, buy -, slot level 0, slot count 1", 1, true) ~= nil,
-		b .. ": the log line names the shop rank and the slot level: " .. last)
+	check(last:find("Nimble=3 (shop rank " .. (2 + base) .. ")", 1, true) ~= nil,
+		b .. ": the log line names the shop rank the game gave: " .. last)
 	-- sold: the slot is empty, the shop item may linger: the item is gone
 	st_m = read_m({ hoard }, { { hoard, base }, { nimble, 2 + base } })
 	check(st_m.owned.Nimble == nil and st_m.owned.Hoard == 1, b .. ": Nimble sold: gone even if r_TempItems still lists it")
@@ -1152,18 +1238,81 @@ for i = 1, 4 do
 	end
 end
 check(reads_t == 1, "r_TempItems that cannot be listed is asked once (" .. reads_t .. ")")
--- the diagnostic shows the shop items, the slot counts and the equipped modes
-local pri_dg = obj("TgGame.TgRepInfo_Player", { r_PlayerDevices = slots_with({ hoard, nimble }),
-	r_TempItems = temp_with({ { hoard, 1 }, { nimble, 2 } }), r_TempItemUndoQueue = {} })
-local pawn_dg = obj("TgPawn_Druid", { InvManager = obj("TgGame.TgInventoryManager_Player", {}),
-	r_EquipDeviceInfo = { { nDeviceId = nimble.item_id, nMode = 1 }, { nDeviceId = 4242, nMode = 0 }, { nDeviceId = 0 } } })
-pawn_dg._is_a = "TgGame.TgPawn"
-T0.player = { Pawn = pawn_dg, PlayerReplicationInfo = pri_dg, WorldInfo = { ptr = function() return 90 end } }
-local text = table.concat(Player.new(DATA):describe("match"), "\n")
-check(text:find("shop items (r_TempItems): 6 listed", 1, true) and text:find("(Nimble), rank 2, cost 300", 1, true)
-	and text:find("(Hoard), level 0, count 1", 1, true) and text:find("equipped 1: device id " .. nimble.item_id .. " (Nimble), mode 1", 1, true)
-	and text:find("1 item(s), 1 other(s)", 1, true) and text:find("shop undo queue (r_TempItemUndoQueue): 0 listed", 1, true),
-	"diagnostic: shop items with rank and cost, slot counts, equipped item modes: " .. text)
+end
+
+do
+section("0.7.0 live reads: sc_game, non-champion pawns, live max health, mode from the game-info class")
+local Gm = require("lib.sc_game")
+-- Object:has: an undeclared property is never read; a struct (no has) is read directly
+local touched = {}
+local o = setmetatable({ has = function(_, k) return k == "Health" end, Health = 10 },
+	{ __index = function(_, k) touched[k] = true end })
+check(Gm.field(o, "Health") == 10 and Gm.field(o, "Missing") == nil and not touched.Missing,
+	"sc_game.field: declared property read, undeclared one not looked up")
+check(Gm.field({ nRank = 2 }, "nRank") == 2 and Gm.field(nil, "x") == nil, "sc_game.field: struct fields read directly")
+check(Gm.is_a({ nRank = 1 }, "TgGame.TgPawn") == nil and Gm.class_name(nil) == nil and Gm.ptr(nil) == nil,
+	"sc_game: a struct cannot say is_a; nil objects give nil")
+-- the LiveCheck log in a Siege match: an illusion and the payload are players' pawns, not champions
+local Det = require("lib.sc_detect")
+local D7 = Det.new(PRED)
+T0.player = match_pc("INT", nil, "Lian", {}, { "Makoa", "Ying" })
+-- worst case: an illusion that answers the bot id of the champion it copies (the game's is "Ying_Illusion")
+local illusion_calls, payload_calls = 0, 0
+local illusion = obj("TgPawn_Illusion", { _parents = { "TgGame.TgPawn_Character", "TgGame.TgPawn" },
+	GetBotId = function() illusion_calls = illusion_calls + 1 return champ("Ying").bot_id end })
+local payload = obj("TgPawn_SiegeEngine_CaptureAndPayload", { _parents = { "TgGame.TgPawn" },
+	GetBotId = function() payload_calls = payload_calls + 1 return 2590 end })
+local my_tf
+for _, pri in T0.player.WorldInfo.GRI.PRIArray:items() do
+	local owner = pri.r_PawnOwner
+	if owner and owner:class():name() == pawn_class("Makoa") then pri.r_nHealthMaximum = 5100 end
+	if owner and owner:class():name() == pawn_class("Ying") then pri.r_nHealthMaximum = 2600 end
+end
+table.insert(T0.player.WorldInfo.GRI.PRIArray, obj("TgGame.TgRepInfo_Player", { r_PawnOwner = illusion,
+	GetTaskForceNumber = function() return 2 end }))
+table.insert(T0.player.WorldInfo.GRI.PRIArray, obj("TgGame.TgRepInfo_Player", { r_PawnOwner = payload,
+	GetTaskForceNumber = function() return 2 end }))
+local st7 = D7:read()
+check(same_list(st7.enemies, { "Makoa", "Ying" }) and payload_calls == 0 and illusion_calls == 0,
+	"illusion and Siege payload: not champions, never asked for a bot id: " .. table.concat(st7.enemies, ","))
+local classes = {}
+for _, rec in ipairs(st7.players) do classes[#classes + 1] = tostring(rec.pawn) .. "=" .. tostring(rec.champ) end
+table.sort(classes)
+check(#st7.players == 4 and table.concat(classes, ","):find("TgPawn_Illusion=nil", 1, true)
+	and st7.players[1].tf ~= nil, "each player as read is kept for the report: " .. table.concat(classes, ","))
+check(st7.enemy_hp.Makoa == 5100 and st7.enemy_hp.Ying == 2600, "enemy max health from TgRepInfo_Player.r_nHealthMaximum")
+check(st7.mode == "siege" and st7.mode_rule == "class TgGame.TgRepInfo_Game_Payload", "Siege from the game-info class")
+-- mode: TDM (and its Roulette subclass) by class, onslaught by map on the base class, nothing else guessed
+local function gri_of(class, parents)
+	local g = obj(class, {})
+	g._parents = parents
+	return g
+end
+check(D7:guess_mode("td_dragonarena_p", gri_of("TgGame.TgRepInfo_Game_TeamDeathMatch_Roulette",
+	{ "TgGame.TgRepInfo_Game_TeamDeathMatch", "TgGame.TgRepInfo_Game" })) == "tdm", "Roulette TDM is a TDM by class")
+check(D7:guess_mode("ons_brightmarsh_p", gri_of("TgGame.TgRepInfo_Game", {})) == "onslaught", "onslaught by map on the base class")
+-- the 8.1 map packages: Siege runs on the base class (sg_icemines_p in a real match), as do onslaught
+-- (ON_*) and King of the Hill
+local base = gri_of("TgGame.TgRepInfo_Game", {})
+for map, want in pairs({ sg_icemines_p = "siege", sg_tcrossing_p = "siege", sgb_serpentbeach_p = "siege",
+	s_celestialfortress_p = "siege", on_primalcourt_p = "onslaught", koth_tradedistrict_p = "onslaught",
+	tdm_hole_p = "tdm", td_abyss_p = "tdm", ktm_tdv2_p = "tdm", shootingrange_p = "range" }) do
+	local got, rule = D7:guess_mode(map, base)
+	check(got == want, map .. " on the base class: " .. want .. " (got " .. tostring(got) .. ", " .. tostring(rule) .. ")")
+end
+check(D7:guess_mode("mystery_p", gri_of("TgGame.TgRepInfo_Game", {})) == nil, "an unknown map on the base class: no mode")
+-- the predictor's squishy rule: the live max health; a hand-picked enemy has none, so it is not counted
+local function sentinel(live)
+	PRED.live_hp = live
+	for _, r in ipairs(PRED:rank_items(PRED:champion("Lian"), { PRED:champion("Ying"), PRED:champion("Makoa") }, {}, "mid")) do
+		if r.item == "Sentinel" then return r.score end
+	end
+	return 0
+end
+local none, tanky, one, two = sentinel({}), sentinel({ Ying = 2600 }), sentinel({ Ying = 2100 }), sentinel({ Ying = 2100, Makoa = 2000 })
+PRED.live_hp = {}
+check(none == 0 and tanky == 0 and one > 0 and two > one,
+	"squishy follows the live max health only, no health shipped (" .. none .. " / " .. tanky .. " / " .. one .. " / " .. two .. ")")
 end
 
 -- ------------------------------------------------------------------ 3. main.lua end to end
@@ -1262,14 +1411,19 @@ frame(app, "menu closes")
 check(MOCK.capture == false, "closing the menu releases the mouse")
 
 section("main.lua: champion select, French game")
+GAME.lang = "FRA"   -- a French client: lang.language() answers FRA from the start
+app = load_app({ tutorial_done = true })
 app.T.player = lobby_pc("FRA", "FR", "Cassie", { "Inara" })
 app.T.press("Ctrl+J")
 frames(app, "champ select FRA", 4)
-check(L.lang == "fr", "Auto UI language follows the game (fr)")
+check(L.lang == "fr", "Auto UI language follows the game (fr), from the engine while lang.language() says INT")
 local cassie = champ("Cassie")
 check(shown_has("FR" .. cassie.name_msg), "the game's champion name is shown")
 
 section("main.lua: in a match, Japanese game, live items")
+GAME.lang = "JPN"
+app = load_app({ tutorial_done = true })
+app.T.press("Ctrl+J")
 local it1, it2 = DATA.items[DATA.item_order[1]], DATA.items[DATA.item_order[6]]
 app.T.player = match_pc("JPN", "名前", "Lian", { "Inara" }, { "Makoa", "Androxus", "Viktor", "Grohk", "Fernando" },
 	{ { it1.item_id, 2 }, { it2.item_id, 1 } })
@@ -1291,6 +1445,7 @@ frame(app, "lock")
 check(#app.T.toasts >= 2, "lock / layout give a toast")
 
 section("main.lua: every UI language, every tab")
+GAME.lang = "INT"
 for _, l in ipairs({ "en", "fr", "de", "it", "ru", "zh", "ja", "ko" }) do
 	local a = load_app({ lang = l, tutorial_done = true, show_on_start = true })
 	a.T.player = match_pc("INT", "EN", "Inara", {}, { "Makoa", "Lian" })
@@ -1371,11 +1526,11 @@ app.T.player = match_pc("FRA", "FR", "Cassie", { "Inara" }, { "Makoa", "Grohk" }
 	roster(601, { "Cassie", "Inara" }))
 frames(app, "match of the same game", 3)
 check(V.owned.Wrecker == 2, "the match of the same game keeps the manual items")
-check(shown_has(L.t("owned_live", "InvManager")), "items read live in the match")
+check(shown_has(L.t("owned_live", "PRI.r_PlayerDevices + r_TempItems")), "items read live in the match")
 app.T.player.Pawn = nil
 frames(app, "dead", 3)
-check(shown_has(L.t("owned_live", "InvManager")) and shown_has(L.t("st_me", "Cassie")),
-	"dead: champion and live items are kept (English UI on a French game: the English name)")
+check(shown_has(L.t("owned_live", "PRI.r_PlayerDevices + r_TempItems")) and shown_has(L.t("st_me", EN("Cassie"))),
+	"dead: champion and live items are kept (English UI: the game's English name)")
 app.T.player = lobby_pc("FRA", "FR", "Cassie", { "Inara" }, 601)
 frames(app, "back in the lobby", 2)
 check(V.owned.Wrecker == 2 and not shown_has(L.t("st_champ_select")), "lobby with the last roster: not a new game")
@@ -1384,6 +1539,7 @@ frames(app, "next champion select", 2)
 check(next(V.owned) == nil, "a new game empties the manual items")
 
 section("main.lua: item chips, 4 slots, header, names, loading")
+GAME.lang = "FRA"   -- a French client with the mod in English
 app = load_app({ tutorial_done = true, lang = "en" })
 V = app.T.values
 local four = { { DATA.items.Haven.item_id, 1 }, { DATA.items.Wrecker.item_id, 1 }, { DATA.items.Nimble.item_id, 1 },
@@ -1428,6 +1584,7 @@ frames(app, "phase set by hand", 2)
 check(shown_has("  ·  " .. L.t("phase_late")), "a phase set by hand is shown")
 V.phase = "auto"
 app.T.player.WorldInfo.GRI.class = function() return { name = function() return "TgGame.TgGRI_Mystery" end } end
+app.T.player.WorldInfo.GRI.is_a = function() return false end
 app.T.player.WorldInfo.path = function() return "Mystery_P.TheWorld" end
 frames(app, "unknown mode", 3)
 check(not shown_has(L.t("mode_siege")) and not shown_has("mode_unknown"), "an unknown mode is simply not shown")
@@ -1461,15 +1618,16 @@ check(shown_has(L.t("owned_full")) and MOCK.disabled_n > 0, "manual grid: 4 item
 app.T.player = nil
 frames(app, "loading after champion select", 3)
 check(shown_has(L.t("badge_loading")) and not shown_has(L.t("badge_plan")), "loading: not 'not in a game'")
-check(shown_has(L.t("st_auto", L.t("st_loading"))) and shown_has(L.t("st_me", "Cassie")), "loading: my pick kept")
+check(shown_has(L.t("st_auto", L.t("st_loading"))) and shown_has(L.t("st_me", EN("Cassie"))), "loading: my pick kept")
+GAME.lang = "INT"
 
 section("main.lua: header without repeats, names setting explained")
 app = load_app({ tutorial_done = true, lang = "en", display = "detailed" })
 V = app.T.values
-app.T.player = match_pc("INT", nil, "Lian", { "Inara" }, { "Makoa", "Grohk" })   -- no translator: the mod's words
+app.T.player = match_pc("INT", nil, "Lian", { "Inara" }, { "Makoa", "Grohk" })
 app.T.press("Ctrl+H")
 frames(app, "Damage champion", 3)
-local role_d, style_d = L.t("role_Damage"), L.t("style_dps")
+local role_d, style_d = game_text("EN", DATA.role_msg.Damage) or L.t("role_Damage"), L.t("style_dps")   -- the game's label
 local twice = false
 for _, sh in ipairs(MOCK.shown) do
 	if sh:find("(" .. role_d .. ")", 1, true) and sh:find("  ·  " .. style_d, 1, true) then twice = true end
@@ -1477,19 +1635,24 @@ end
 check(shown_has("(" .. role_d .. ")") and not twice, "Damage champion: role once, no playstyle repeating it")
 app.T.player = match_pc("INT", nil, "Grohk", { "Inara" }, { "Makoa", "Lian" })
 frames(app, "Support champion", 3)
-check(shown_has("(" .. L.t("role_Support") .. ")  ·  " .. L.t("style_heal")), "Support: role and its chosen playstyle")
+check(shown_has("(" .. (game_text("EN", DATA.role_msg.Support) or L.t("role_Support")) .. ")  ·  " .. L.t("style_heal")),
+	"Support: role and its chosen playstyle")
+local PREFIX = { fr = "FR", de = "DE", ru = "RU", ja = "名前" }
 for _, l in ipairs({ "fr", "de", "ru", "ja" }) do
 	V.lang = l
 	frames(app, "header in " .. l, 2)
 	local dup = false
 	for _, sh in ipairs(MOCK.shown) do
-		local a, b = L.t("role_Support"), L.t("style_heal")
+		local a, b = game_text(PREFIX[l], DATA.role_msg.Support) or L.t("role_Support"), L.t("style_heal")
 		if a == b and sh:find(a .. ")  ·  " .. b, 1, true) then dup = true end
 	end
 	check(not dup, l .. ": no repeated label in the header")
 end
 V.lang = "en"
--- settings: what the names setting does now, tooltip
+-- settings: what the names setting does now, tooltip (a French client)
+GAME.lang = "FRA"
+app = load_app({ tutorial_done = true, lang = "en", display = "detailed" })
+V = app.T.values
 app.T.player = match_pc("FRA", "FR", "Lian", { "Inara" }, { "Makoa", "Grohk" })
 app.T.press("Ctrl+O")
 frames(app, "settings, French game, English mod", 3)
@@ -1508,16 +1671,12 @@ check(not french_sentence, "game names on: no French description or role in the 
 V.game_names = false
 
 section("main.lua: Resilience bought at I, upgraded to II then III in the match")
+GAME.lang = "INT"
 app = load_app({ tutorial_done = true, lang = "en", display = "detailed" })
 local res_m = DATA.items.Resilience
 local buy = { { res_m.item_id, 1 }, { DATA.items.Haven.item_id, 1 }, { DATA.items.Wrecker.item_id, 1 } }
 app.T.player = match_pc("INT", "EN", "Makoa", { "Inara" }, { "Lian", "Androxus" }, buy)
-local chain = app.T.player.Pawn.InvManager.InventoryChain
-local node = chain
-while node do
-	node.r_nDeviceLevel = node.m_InventoryData.nLevel
-	node = node.Inventory
-end
+local temp = app.T.player.PlayerReplicationInfo.r_TempItems
 app.T.press("Ctrl+H")
 local function res_rank()
 	local id = tostring(res_m.name_msg)
@@ -1532,12 +1691,11 @@ frames(app, "Resilience rank I", 4)
 check(res_rank() == "I", "rank I shown after buying: " .. tostring(res_rank()))
 check(shown_has(L.t("owned_n", 3, 4)), "items 3/4")
 for r, roman in ipairs({ "I", "II", "III" }) do
-	chain.r_nDeviceLevel = r   -- the game's ChangeDeviceLevel; nLevel keeps the rank bought (1)
+	temp[1].nRank = r   -- the shop rank after each upgrade
 	frames(app, "Resilience rank " .. roman, 4)
 	check(res_rank() == roman, "after the upgrade the panel shows Resilience " .. roman .. " (shown: " .. tostring(res_rank()) .. ")")
 	check(shown_has(L.t("owned_n", 3, 4)), "still items 3/4 at rank " .. roman)
 end
-check(chain.m_InventoryData.nLevel == 1, "the purchase record was left at 1, as in the game")
 
 section("main.lua: Wrecker, Nimble and Morale Boost upgraded I -> II -> III, one log line per change")
 for _, ui_lang in ipairs({ "en", "fr" }) do
@@ -1548,13 +1706,7 @@ for _, ui_lang in ipairs({ "en", "fr" }) do
 	for i, k in ipairs(three) do buy3[i] = { DATA.items[k].item_id, 1 } end
 	-- a French client (Broyeur / Agile / Amassage in the shop) with the mod in English or French
 	app.T.player = match_pc("FRA", "FR", "Makoa", { "Inara" }, { "Lian", "Androxus" }, buy3)
-	local nodes = {}
-	local nd = app.T.player.Pawn.InvManager.InventoryChain
-	while nd do
-		nd.r_nDeviceLevel = 1
-		nodes[#nodes + 1] = nd
-		nd = nd.Inventory
-	end
+	local pri3 = app.T.player.PlayerReplicationInfo
 	app.T.press("Ctrl+H")
 	local function chip_rank(key)
 		local id = tostring(DATA.items[key].name_msg)
@@ -1583,7 +1735,7 @@ for _, ui_lang in ipairs({ "en", "fr" }) do
 	check(item_logs() == 1, ui_lang .. ": one log line for the purchases (" .. item_logs() .. ")")
 	for i, k in ipairs(three) do
 		for r = 2, 3 do
-			nodes[i].r_nDeviceLevel = r   -- ChangeDeviceLevel; nLevel stays at 1
+			pri3.r_TempItems[i].nRank = r   -- the shop rank after the upgrade
 			local before = item_logs()
 			frames(app, ui_lang .. ": " .. k .. " rank " .. r, 6)
 			local shown, sh = chip_rank(k)
@@ -1597,13 +1749,13 @@ for _, ui_lang in ipairs({ "en", "fr" }) do
 	for _, line in ipairs(app.T.logs) do
 		if line:find("[smartcounter] items [", 1, true) then last = line end
 	end
-	check(last and last:find("Wrecker=3 (shop rank -, dev 3", 1, true) and last:find("Nimble=3 (shop rank -, dev 3", 1, true)
-		and last:find("Morale Boost=3 (shop rank -, dev 3", 1, true), ui_lang .. ": the last log line has the three items at III: " .. tostring(last))
+	check(last and last:find("Wrecker=3 (shop rank 3)", 1, true) and last:find("Nimble=3 (shop rank 3)", 1, true)
+		and last:find("Morale Boost=3 (shop rank 3)", 1, true), ui_lang .. ": the last log line has the three items at III: " .. tostring(last))
 	local before = item_logs()
 	frames(app, ui_lang .. ": nothing changes", 8)
 	check(item_logs() == before, ui_lang .. ": no log line while nothing changes (4 s of reads)")
-	-- selling one item: one line, the item is gone
-	app.T.player.Pawn.InvManager.InventoryChain = nodes[2]
+	-- selling one item: its slot is emptied (r_TempItems may still list it): one line, the item is gone
+	table.remove(pri3.r_PlayerDevices, 3)
 	frames(app, ui_lang .. ": Wrecker sold", 6)
 	check(item_logs() == before + 1, ui_lang .. ": a sale writes one log line")
 	check(shown_has(L.t("owned_n", 2, 4)), ui_lang .. ": items 2/4 after the sale")
@@ -1616,12 +1768,12 @@ end
 L.set("en")
 
 do
-section("main.lua: practice map reads items, status in the log, diagnostic button")
+section("main.lua: practice map reads items, status in the log, report button")
+GAME.lang = "FRA"   -- a French Steam client, the mod set to English
 app = load_app({ tutorial_done = true, lang = "en", display = "detailed" })
 local res_p = DATA.items.Resilience
 app.T.player = match_pc("INT", "EN", "Makoa", {}, {}, { { res_p.item_id, 1 } })
 app.T.player.WorldInfo.GRI = nil                                -- training / range: no match state
-app.T.player.Pawn.InvManager.InventoryChain.r_nDeviceLevel = 1
 app.T.press("Ctrl+H")
 frames(app, "practice map", 4)
 local function logged(pat)
@@ -1633,28 +1785,32 @@ local function logged(pat)
 end
 check(logged("[smartcounter] status: loading, practice map") == 1, "the practice map is said once in the log")
 check(logged("item reading paused") == 0, "items are not paused on a practice map")
-check(logged("[smartcounter] items [") == 1 and logged("Resilience=1 (shop rank -, dev 1") == 1, "items read on a practice map")
-app.T.player.Pawn.InvManager.InventoryChain.r_nDeviceLevel = 2
+check(logged("[smartcounter] items [") == 1 and logged("Resilience=1 (shop rank 1)") == 1, "items read on a practice map")
+app.T.player.PlayerReplicationInfo.r_TempItems[1].nRank = 2
 frames(app, "practice map, upgrade", 4)
-check(logged("Resilience=2 (shop rank -, dev 2") == 1, "an upgrade on a practice map is followed")
--- the button: the menu's Match tab, one block in the log and a toast
+check(logged("Resilience=2 (shop rank 2)") == 1, "an upgrade on a practice map is followed")
+-- the Match tab's report button (bug reports): one short block from the modules' state, and a toast
 app.T.press("Ctrl+J")
 MOCK.tab_sel = "tab_match"
 frames(app, "match tab", 2)
-check(shown_has(L.t("owned_diag")), "the Match tab has the diagnostic button")
+check(shown_has(L.t("owned_diag")), "the Match tab has the report button")
+check(logged("[smartcounter] report") == 0, "no report without a press")
 local before = #app.T.logs
 MOCK.click = { [L.t("owned_diag")] = true }
-frames(app, "diagnostic pressed", 2)
-check(logged("[smartcounter] diagnostic: status loading") == 1 and logged("(Resilience), buy level 1, device level 2") == 1,
-	"one press: the reader's view of the objects and levels in the log")
-check(#app.T.logs - before < 30, "one short block per press (" .. (#app.T.logs - before) .. " lines)")
+frames(app, "report pressed", 2)
+MOCK.click = {}
+check(logged("[smartcounter] report v0.7.0") == 1 and logged("report: items live (PRI.r_PlayerDevices + r_TempItems), owned Resilience=2") == 1,
+	"one press: version, status and the items read, in the log")
+check(logged("client language FRA (lang.language INT), UI en (setting en)") == 1,
+	"the report says where the language comes from: the engine's FRA, lang.language()'s INT, the setting")
+check(#app.T.logs - before <= 6, "one short block per press (" .. (#app.T.logs - before) .. " lines)")
 local toasted = false
 for _, x in ipairs(app.T.toasts) do
 	if x == L.t("owned_diag_done") then toasted = true end
 end
-check(toasted, "a toast says where the details went")
-frames(app, "after the press", 6)
-check(logged("[smartcounter] diagnostic:") == 1, "no diagnostic without a press")
+check(toasted, "a toast says where the report went")
+frames(app, "after the press", 4)
+check(logged("[smartcounter] report v0.7.0") == 1, "nothing more without a press")
 app.T.press("Ctrl+J")
 -- a real loading after champion select still pauses, and says so once
 app = load_app({ tutorial_done = true, lang = "en" })
@@ -1668,11 +1824,23 @@ check(logged("[smartcounter] status: loading (map") == 1 and logged("item readin
 end
 
 do
-section("main.lua: a live match without inventory chain, Nimble upgraded through r_TempItems")
+section("main.lua: no game data, the mod stays off and says why")
+GAME.lang = "INT"
+GAME.fail = "file not found"
+app = load_app({ tutorial_done = true })
+frame(app, "no game data")
+check(#app.T.toasts == 1 and app.T.toasts[1]:find("assembly.dat: file not found", 1, true) and not app.T.bound("Ctrl+J"),
+	"no game data: one toast with the reason, no key bound: " .. tostring(app.T.toasts[1]))
+frame(app, "no game data, again")
+check(#app.T.toasts == 1 and tostring(app.T.logs[#app.T.logs]):find("game data unavailable", 1, true),
+	"the reason is said once, and logged")
+GAME.fail = nil
+
+section("main.lua: a live match, Nimble upgraded through r_TempItems")
 app = load_app({ tutorial_done = true, lang = "fr", display = "detailed" })
 L.set("fr")
 local hoard, nimble = DATA.items.Hoard, DATA.items.Nimble
-app.T.player = match_pc("FRA", "FR", "Io", { "Inara" }, { "Lian", "Androxus" })   -- pawn without InvManager chain
+app.T.player = match_pc("FRA", "FR", "Io", { "Inara" }, { "Lian", "Androxus" })
 local pri = app.T.player.PlayerReplicationInfo
 local slots = {}
 for i = 1, 49 do slots[i] = { CurrentDeviceId = 0, Level = 0 } end

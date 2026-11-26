@@ -32,8 +32,8 @@ function M:lang_picker(id)
 		labels[#labels + 1], keys[#keys + 1] = l[2], l[1]
 		if cfg.lang == l[1] then cur = #keys end
 	end
-	A.G.ui.set_next_item_width(260)
-	local i, changed = A.G.ui.combo("##lang_" .. id, cur, labels)
+	ui.set_next_item_width(260)
+	local i, changed = ui.combo("##lang_" .. id, cur, labels)
 	if changed and keys[i] then A.set_lang(keys[i]) end
 end
 
@@ -76,7 +76,7 @@ function M:champ_combo(label, current)
 	for i, n in ipairs(keys) do
 		if n == current then idx = i end
 	end
-	local ni, changed = A.G.ui.combo(label, idx, labels)
+	local ni, changed = ui.combo(label, idx, labels)
 	if changed then return keys[ni] or "", true end
 	return current, false
 end
@@ -97,7 +97,7 @@ end
 -- until one goes back to 0.
 function M:owned_editor()
 	local A = self.A
-	local ui, G, cfg = A.G.ui, A.G, A.cfg
+	local G, cfg = A.G, A.cfg
 	local slots, n = A.D.core_slots or 4, 0
 	for _ in pairs(cfg.owned) do n = n + 1 end
 	local full = n >= slots
@@ -111,10 +111,10 @@ function M:owned_editor()
 				local locked = full and r == 0
 				ui.text("%s", A.TX:item(n))
 				ui.set_next_item_width(-1)
-				if locked and ui.begin_disabled then ui.begin_disabled(true) end
-				local max_r = A.PRED.ranks(A.D, n)
+				if locked then ui.begin_disabled(true) end
+				local max_r = A.D.max_rank
 				local v, c = ui.slider_int("##rank", r, 0, max_r, r == 0 and "-" or self.V.roman(r))
-				if locked and ui.end_disabled then ui.end_disabled() end
+				if locked then ui.end_disabled() end
 				if c and not locked then
 					v = math.max(0, math.min(max_r, v))
 					cfg.owned[n] = v > 0 and v or nil
@@ -134,7 +134,7 @@ end
 function M:owned_section()
 	local A = self.A
 	local G, C, t, st = A.G, A.G.C, A.t, A.PLAYER.state
-	A.G.ui.separator_text(t("owned_hdr"))
+	ui.separator_text(t("owned_hdr"))
 	if A.cfg.live_items and st.available then
 		local names = {}
 		for n, r in pairs(st.owned) do names[#names + 1] = A.TX:item(n) .. " " .. self.V.roman(r) end
@@ -147,15 +147,13 @@ function M:owned_section()
 		self:owned_editor()
 		G.wrapped(C.DIM, t("owned_hint"))
 	end
-	if A.cfg.live_items then
-		if ui.small_button(t("owned_diag")) then A.items_diag() end
-		if ui.is_item_hovered and ui.is_item_hovered() then pcall(ui.set_tooltip, "%s", t("owned_diag_tip")) end
-	end
+	if ui.small_button(t("owned_diag")) then A.items_diag() end
+	if ui.is_item_hovered() then ui.set_tooltip("%s", t("owned_diag_tip")) end
 end
 
 function M:pick_section()
 	local A = self.A
-	local ui, cfg, t, DET = A.G.ui, A.cfg, A.t, A.DET
+	local cfg, t, DET = A.cfg, A.t, A.DET
 	ui.separator_text(t("my_champion"))
 	ui.set_next_item_width(220)
 	local me, ch = self:champ_combo("##me", cfg.manual.me)
@@ -182,7 +180,7 @@ end
 
 function M:enemies_section()
 	local A = self.A
-	local ui, cfg, t, D = A.G.ui, A.cfg, A.t, A.D
+	local cfg, t, D = A.cfg, A.t, A.D
 	ui.separator_text(t("enemies_hdr"))
 	local role_items = {}
 	for i, r in ipairs(ROLES) do role_items[i] = r == "" and t("all_roles") or self.V:role(r) end
@@ -213,7 +211,7 @@ end
 
 function M:phase_mode_section()
 	local A = self.A
-	local ui, cfg, t = A.G.ui, A.cfg, A.t
+	local cfg, t = A.cfg, A.t
 	ui.separator_text(t("phase_mode"))
 	ui.align_text_to_frame_padding()
 	ui.text("%s", t("phase"))
@@ -241,41 +239,42 @@ function M:tab_match()
 	self:enemies_section()
 	self:phase_mode_section()
 	self:owned_section()
-	A.G.ui.spacing()
-	A.G.ui.separator()
+	ui.spacing()
+	ui.separator()
 	A.MATCH:update()   -- the choices above may have changed the inputs this frame
 	self.V:draw_detailed(true)
 end
 
 -- ------------------------------------------------------------------ Settings tab
 -- What the names setting does right now: "game in Français, mod in English, names in English".
--- nil while the game's language is unknown.
 function M:names_now()
 	local A = self.A
 	local TX, L = A.TX, A.L
-	if not TX.lang_code then return nil end
-	local game = TX.UI_LANG[TX.lang_code]
-	local game_name = game and L.native(game) or TX.lang_code
-	local names = TX:names_ok("name") and game_name or L.native("en")
-	return A.t("set_game_names_now", game_name, L.native(A.ui_lang()), names)
+	local function label(ext)
+		local code = TX.UI_LANG[ext]
+		return code and L.native(code) or ext
+	end
+	local names = TX:names_ext()
+	return A.t("set_game_names_now", label(TX.lang_code), L.native(A.ui_lang()),
+		names and label(names) or L.native("en"))
 end
 
 function M:checkbox(key, field)
 	local A = self.A
-	local v, c = A.G.ui.checkbox(A.t(key), A.cfg[field])
+	local v, c = ui.checkbox(A.t(key), A.cfg[field])
 	if c then A.cfg[field] = v; A.CFG:mark_dirty() end
 end
 
 function M:display_settings()
 	local A = self.A
-	local ui, cfg, t = A.G.ui, A.cfg, A.t
+	local cfg, t = A.cfg, A.t
 	ui.separator_text(t("set_display"))
 	self:checkbox("set_show_on_start", "show_on_start")
 	self:checkbox("set_show_tip", "show_tip")
 	self:checkbox("set_auto", "auto_detect")
 	self:checkbox("set_live_items", "live_items")
 	self:checkbox("set_game_names", "game_names")
-	if ui.is_item_hovered and ui.is_item_hovered() then pcall(ui.set_tooltip, "%s", t("set_game_names_tip")) end
+	if ui.is_item_hovered() then ui.set_tooltip("%s", t("set_game_names_tip")) end
 	A.G.wrapped(A.G.C.DIM, t("set_game_names_hint"))
 	local now = self:names_now()
 	if now then A.G.wrapped(A.G.C.ACCENT, now) end
@@ -307,7 +306,7 @@ end
 
 function M:key_settings()
 	local A = self.A
-	local ui, G, C, t, K, keys = A.G.ui, A.G, A.G.C, A.t, A.KEYS, A.cfg.keys
+	local G, C, t, K, keys = A.G, A.G.C, A.t, A.KEYS, A.cfg.keys
 	ui.separator_text(t("set_keys"))
 	ui.table("sc_keys", 3, { flags = ui.TableFlags.SizingStretchProp or 0 }, function()
 		for _, a in ipairs(K.ACTIONS) do
@@ -335,7 +334,7 @@ function M:key_settings()
 end
 
 function M:tab_settings()
-	self.A.G.ui.separator_text(self.A.t("set_language"))
+	ui.separator_text(self.A.t("set_language"))
 	self:lang_picker("set")
 	self:display_settings()
 	self:key_settings()
@@ -344,7 +343,7 @@ end
 -- ------------------------------------------------------------------ Help & About tab
 function M:tab_help()
 	local A = self.A
-	local ui, G, C, t, keys = A.G.ui, A.G, A.G.C, A.t, A.cfg.keys
+	local G, C, t, keys = A.G, A.G.C, A.t, A.cfg.keys
 	G.wrapped(nil, t("help_keys", keys.menu, keys.overlay, keys.settings, keys.lock, keys.layout))
 	ui.separator_text(t("help_cmds"))
 	ui.bullet()
@@ -375,7 +374,7 @@ end
 -- Next to the menu (right side when it fits, else left).
 function M:draw_tutorial(mx, my, mw)
 	local A = self.A
-	local ui, t, keys, step = A.G.ui, A.t, A.cfg.keys, self.tut_step
+	local t, keys, step = A.t, A.cfg.keys, self.tut_step
 	local sw = ui.screen()
 	local tw = math.floor(340 * ({ 0.92, 1.0, 1.16 })[A.cfg.text_size])
 	local tx = (mx + mw + tw + 16 < sw) and (mx + mw + 12) or math.max(0, mx - tw - 12)
@@ -386,7 +385,7 @@ function M:draw_tutorial(mx, my, mw)
 	if step == 4 then text = t("tut4", keys.settings) end
 	local WF = ui.WindowFlags
 	local open = ui.window(t("tut", step, TUT_STEPS) .. "###sc_tuto",
-		{ open = true, flags = A.G.bor(WF.NoCollapse, WF.NoSavedSettings, WF.NoResize, WF.NoFocusOnAppearing) },
+		{ open = true, flags = bit.bor(WF.NoCollapse, WF.NoSavedSettings, WF.NoResize, WF.NoFocusOnAppearing) },
 		function()
 			A.with_font("body", function()
 				A.bold(A.G.C.ACCENT, t("tut" .. step .. "_t"))
@@ -418,7 +417,7 @@ end
 
 function M:draw()
 	local A = self.A
-	local ui, t, cfg = A.G.ui, A.t, A.cfg
+	local t, cfg = A.t, A.cfg
 	local sw, sh = ui.screen()
 	local k = ({ 0.92, 1.0, 1.16 })[cfg.text_size]
 	local w = math.floor(math.max(480, math.min(640, sw * 0.36)) * k)

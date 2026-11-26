@@ -1,11 +1,17 @@
 """Exports engine data and constants to the Lua mod, and the Lua test expectations.
 
 Writes:
-  src/scripts/lib/sc_data.lua   champions, items and every constant of predictor.py (one source of
-                                truth: Python). Game names are NOT exported: only their message ids
-                                (name_msg / desc_msg), translated by the game at run time.
+  src/scripts/lib/sc_data.lua   the mod's own rules (tags, tiers, counter weights, archetypes, styles)
+                                and every constant of predictor.py (one source of truth: Python), plus
+                                the ids that link them to the game: a bot id per champion, an item id
+                                per shop item. Nothing the game data has is exported (no name, message
+                                id, role, health, cost or rank count): the mod reads them at run time
+                                with Tempest's Game Data API (lib/sc_gamedata.lua, lib/sc_text.lua).
   engine/tests/expected.lua     results of predictor.py on reference scenarios; tests/lua_tests.lua
                                 checks that the Lua port gives the same results (run_lua_tests.ps1)
+  engine/tests/game_ids.lua     test fixture, never packaged: the ids the assembly / lang mocks of
+                                lua_tests.lua answer with (from game_ids_8_1.json and champions_data.json;
+                                numbers and the mod's role keys only, no game text)
 
     python export_lua.py
 """
@@ -16,6 +22,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
 import predictor as P  # noqa: E402
+from extract_ids import ROLE_MSG, CATEGORY_MSG  # noqa: E402
 
 LIB = os.path.normpath(os.path.join(HERE, "..", "src", "scripts", "lib"))
 TESTS = os.path.join(HERE, "tests")
@@ -58,6 +65,17 @@ def ordered_values(d):
     return [{"item": k, "v": v} for k, v in d.items()]
 
 
+WIDTH = 110   # a table of plain values that fits on one line is written on one line
+
+
+def flat(x):
+    return not isinstance(x, (dict, list, tuple)) or all(not isinstance(y, (dict, list, tuple)) for y in x)
+
+
+def lua_key(k):
+    return k if isinstance(k, str) and k.isidentifier() else f"[{lua(k)}]"
+
+
 def lua(v, ind=0):
     pad, pad1 = "  " * ind, "  " * (ind + 1)
     if v is None:
@@ -78,11 +96,11 @@ def lua(v, ind=0):
     if isinstance(v, dict):
         if not v:
             return "{}"
-        parts = []
-        for k, x in v.items():
-            key = k if isinstance(k, str) and k.isidentifier() else f"[{lua(k)}]"
-            parts.append(f"{pad1}{key} = {lua(x, ind + 1)},\n")
-        return "{\n" + "".join(parts) + pad + "}"
+        if all(flat(x) for x in v.values()):
+            one = "{ " + ", ".join(f"{lua_key(k)} = {lua(x)}" for k, x in v.items()) + " }"
+            if len(pad1) + len(one) <= WIDTH:
+                return one
+        return "{\n" + "".join(f"{pad1}{lua_key(k)} = {lua(x, ind + 1)},\n" for k, x in v.items()) + pad + "}"
     raise TypeError(type(v))
 
 
@@ -100,29 +118,27 @@ def build_data(data):
     champs = []
     for c in data["champions"]:
         champs.append({
-            "name": c["name"], "role": c["role"], "tier": c["meta_tier_8_1"],
-            "hp": c["base_health_8_1"], "pawn": c["pawn_class"], "bot_id": c["bot_id"],
-            "name_msg": c.get("name_msg_id"),
+            # name: the mod's internal key (shown when the game has no text in the shown language);
+            # bot_id: the game's id, matched live with TgPawn.GetBotId() and in the game data
+            "name": c["name"], "tier": c["meta_tier_8_1"], "bot_id": c["bot_id"],
             "tags": c["tags"], "wrecker_effective": c["wrecker_effective"],
             "recs": [{"item": r["item"], "weight": r["weight"], "early": r["early_game_priority"],
-                      "key": r["reason_key"], "args": r["reason_args"]} for r in c["recommended_items_against"]],
-            # slot, device id, name message id, effects (strategy tags: stun, pull, shield...)
-            "abilities": [{"slot": x["slot"], "device_id": x["device_id"], "name_msg": x["name_msg_id"],
-                           "fx": x["fx"]} for x in c.get("abilities", [])],
+                      "key": r["reason_key"]} for r in c["recommended_items_against"]],
+            # slot and effects (strategy tags: stun, pull, shield...); the name comes from the game data
+            "abilities": [{"slot": x["slot"], "fx": x["fx"]} for x in c.get("abilities", [])],
         })
     items = {}
     for k, v in data["items"].items():
-        items[k] = {"cost": v["cost_per_level"], "category": v["category"], "item_id": v["game_item_id"],
-                    "alias_ids": v.get("alias_item_ids", []),
-                    "name_msg": v.get("name_msg_id"), "desc_msg": v.get("desc_msg_id"),
-                    "ranks": v.get("ranks", 3)}
-    text_ids = data["meta"].get("text_ids", {})
+        assert v.get("ranks", P.MAX_RANK) == P.MAX_RANK, (k, v.get("ranks"))   # one max rank for the shop
+        items[k] = {"category": v["category"], "item_id": v["game_item_id"],
+                    "alias_ids": v.get("alias_item_ids", [])}
     return {
         "build": data["meta"]["build"],
         "generated_by": "engine/export_lua.py (do not edit by hand)",
         "champions": champs,
         "items": items,
         "item_order": list(data["items"]),     # shop order (Python dict order = tie-break in build)
+        "squishy_hp": P.SQUISHY_HP,
         "build_slots": P.BUILD_SLOTS,
         "core_slots": P.CORE_SLOTS,
         "primary_share": P.PRIMARY_SHARE,
@@ -154,10 +170,34 @@ def build_data(data):
         "champ_self_bonus": {k: ordered_values(v) for k, v in P.CHAMP_SELF_BONUS.items()},
         "tag_priority": list(P.TAG_PRIORITY),
         "tag_danger": P.TAG_DANGER,
-        # message ids of the role and shop-category names (extract_ids.py)
-        "role_msg": text_ids.get("roles", {}),
-        "category_msg": text_ids.get("categories", {}),
     }
+
+
+# Game values of lib/sc_gamedata.lua (DATA_SET_VALID_VALUES of the 8.1 assembly).
+ROLE_TAGS = {"Frontline": 10542, "Damage": 10601, "Flank": 10541, "Support": 15060}
+SLOT_IDS = {"weapon": 221, "a1": 199, "a2": 200, "a3": 996, "ult": 198}
+
+
+def build_fixture(data):
+    """Ids only, for the assembly / lang mocks of lua_tests.lua (never packaged)."""
+    bots, devices, items = [], [], []
+    for c in data["champions"]:
+        bots.append({"BOT_ID": c["bot_id"], "NAME_MSG_ID": c["name_msg_id"],
+                     "DATA_SET_BOT_TAGS": [{"TAG_TYPE_VALUE_ID": 10591, "TAG_VALUE_ID": ROLE_TAGS[c["role"]]}],
+                     "DATA_SET_BOT_DEVICES": [{"SLOT_USED_VALUE_ID": SLOT_IDS[a["slot"]], "DEVICE_ID": a["device_id"]}
+                                              for a in c["abilities"]]})
+        devices += [{"DEVICE_ID": a["device_id"], "NAME_MSG_ID": a["name_msg_id"]} for a in c["abilities"]]
+    for v in data["items"].values():
+        items.append({"ITEM_ID": v["game_item_id"], "NAME_MSG_ID": v["name_msg_id"], "DESC_MSG_ID": v["desc_msg_id"]})
+        devices.append({"DEVICE_ID": v["game_item_id"],
+                        "DATA_SET_DEVICE_MODES": [{"FIRE_MODE_SEQUENCE": i + 1} for i in range(v["ranks"])]})
+    text_ids = data["meta"]["text_ids"]
+    names = {}
+    for table, msg_names in (("roles", ROLE_MSG), ("categories", CATEGORY_MSG)):
+        for key, name in msg_names.items():
+            names[name] = text_ids[table][key]
+    return {"BOTS": bots, "DEVICES": devices, "ITEMS": items, "lang_names": names,
+            "roles": {c["name"]: c["role"] for c in data["champions"]}}
 
 
 def build_expected(pred):
@@ -203,6 +243,7 @@ def main():
     head = "-- Generated by engine/export_lua.py from champions_data.json and predictor.py. Do not edit.\n"
     write(os.path.join(LIB, "sc_data.lua"), head, build_data(data))
     write(os.path.join(TESTS, "expected.lua"), head, build_expected(P.Predictor(data)))
+    write(os.path.join(TESTS, "game_ids.lua"), head, build_fixture(data))
     return 0
 
 

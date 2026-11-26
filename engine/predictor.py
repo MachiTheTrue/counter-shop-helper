@@ -145,6 +145,7 @@ TIER_BONUS = {"S+": 0.3, "S": 0.22, "A": 0.14, "B": 0.06, "C": 0.0, "D": -0.06}
 # The 8.1 shop: 20 items in 4 categories; 0.5: several items of the same category are allowed.
 ITEM_CATEGORIES = ("Defense", "Utility", "Healing", "Weapon")
 MAX_RANK = 3             # shop ranks I-III when the data has no `ranks` (8.1: 3 for every item)
+SQUISHY_HP = 2200        # Sentinel: an enemy whose live max health is at most this is a squishy target
 BUILD_SLOTS = 5          # always 5 recommendations
 CORE_SLOTS = 4           # 0.6: Paladins holds 4 items -> 4 core slots + the 5th is optional (flex)
 PRIMARY_SHARE = 0.4      # score >= 40 % of the best = primary item, otherwise flex (optional)
@@ -311,6 +312,9 @@ class Predictor:
             raise PredictorError("champions_data.json invalide :\n  " + "\n  ".join(errs))
         self.items = self.data["items"]
         self.champs = {c["name"].lower(): c for c in self.data["champions"]}
+        # 0.7: live max health per enemy name, from the game (TgRepInfo_Player.r_nHealthMaximum).
+        # The mod ships no champion health: without a live value an enemy is not counted as squishy.
+        self.live_hp = {}
         # tolerant lookups: "BombKing", "bomb-king", "maldamba"
         self.alias = {}
         for c in self.data["champions"]:
@@ -390,11 +394,11 @@ class Predictor:
             p = a["probability"] / 100.0
             for item, link in ARCHETYPES[a["key"]]["items"].items():
                 totals[item] = totals.get(item, 0.0) + p * link * ARCHETYPE_SCALE
-        # Sentinel: snowball/duel value grows with the number of squishy targets
-        squishy = sum(1 for e in enemies if e["base_health_8_1"] <= 2200)
+        # Sentinel: snowball/duel value grows with the number of squishy targets (live max health only)
+        squishy = sum(1 for e in enemies if self.live_hp.get(e["name"], SQUISHY_HP + 1) <= SQUISHY_HP)
         if squishy:
             totals["Sentinel"] = totals.get("Sentinel", 0.0) + squishy / n * 3.0
-            reasons.setdefault("Sentinel", []).append(f"{squishy} cible(s) fragile(s) (≤ 2200 PV) : valeur de snowball")
+            reasons.setdefault("Sentinel", []).append(f"{squishy} cible(s) fragile(s) (≤ {SQUISHY_HP} PV) : valeur de snowball")
         selfv = self.self_values(player, style)
         for item in selfv:
             totals.setdefault(item, 0.0)

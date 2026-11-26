@@ -186,13 +186,13 @@ function V:chip_label(b)
 end
 
 -- Width and height of a chip: [inset | category mark | gap | label | pad].
-local function chip_size(ui, label)
+local function chip_size(label)
 	local w, h = ui.calc_text_size(label)
 	return math.ceil(w + TEXT_X + CHIP_PAD), math.ceil(h + 8)
 end
 
 -- The label cut to a width ("..." at the end), on whole UTF-8 characters.
-local function fit_label(ui, label, max_w)
+local function fit_label(label, max_w)
 	if ui.calc_text_size(label) <= max_w then return label end
 	local s = label
 	while #s > 0 do
@@ -203,13 +203,12 @@ local function fit_label(ui, label, max_w)
 end
 
 function V:item_tooltip(b)
-	local ui = self.A.G.ui
-	if not (ui.is_item_hovered and ui.is_item_hovered()) then return end
+	if not ui.is_item_hovered() then return end
 	local lines = { self:item(b.item) .. "  ·  " .. self:category(b.category) }
 	if b.blocked then lines[#lines + 1] = self.A.t("flex_full_long") end
 	local d = self.A.TX:item_desc(b.item)
 	if d then lines[#lines + 1] = d end
-	pcall(ui.set_tooltip, "%s", table.concat(lines, "\n"))
+	ui.set_tooltip("%s", table.concat(lines, "\n"))
 end
 
 -- Colours of a chip, from the palette (G.C): background, progress fill, outline (nil = none), text.
@@ -230,42 +229,38 @@ end
 -- whatever its width; the outline is drawn last so nothing covers it.
 function V:draw_chip(b, label, w, h)
 	local G = self.A.G
-	local ui, C = G.ui, G.C
-	local okp, x1, y1 = pcall(ui.cursor_screen_pos)
-	if not (okp and type(x1) == "number" and ui.dl and ui.color and ui.dummy) then
-		return G.tcol(b.blocked and C.DIM or (b.rank >= b.target and C.GOOD or C.DIM), label)
-	end
+	local C = G.C
+	local x1, y1 = ui.cursor_screen_pos()
 	ui.dummy(w, h)
 	local st = self:chip_style(b)
 	local function col(c, a) return ui.color(c[1], c[2], c[3], (c[4] or 1) * (a or 1) * st.alpha) end
 	local dl, x2, y2 = ui.dl, x1 + w, y1 + h
-	pcall(dl.rect_filled, x1, y1, x2, y2, col(st.bg), ROUND)
+	dl.rect_filled(x1, y1, x2, y2, col(st.bg), ROUND)
 	local frac = b.target > 0 and math.min(1, b.rank / b.target) or 0
 	if frac > 0 then
-		pcall(dl.rect_filled, x1, y1, x1 + math.max(2 * ROUND, w * frac), y2, col(st.fill, 0.9), ROUND)
+		dl.rect_filled(x1, y1, x1 + math.max(2 * ROUND, w * frac), y2, col(st.fill, 0.9), ROUND)
 	end
 	local rgb = G.CATEGORY_RGB[b.category]
-	if rgb and ui.rgb then
-		pcall(dl.rect_filled, x1 + MARK_X, y1 + MARK_Y, x1 + MARK_X + MARK_W, y2 - MARK_Y,
+	if rgb then
+		dl.rect_filled(x1 + MARK_X, y1 + MARK_Y, x1 + MARK_X + MARK_W, y2 - MARK_Y,
 			ui.rgb(rgb, 0.95 * st.alpha), MARK_W / 2)
 	end
-	local text = fit_label(ui, label, w - TEXT_X - CHIP_PAD)
+	local text = fit_label(label, w - TEXT_X - CHIP_PAD)
 	local _, th = ui.calc_text_size(text)
-	pcall(dl.text, x1 + TEXT_X, y1 + math.floor((h - (th or 0)) / 2), col(st.text), "%s", text)
+	dl.text(x1 + TEXT_X, y1 + math.floor((h - (th or 0)) / 2), col(st.text), "%s", text)
 	if st.edge then
 		local inset = st.edge_w / 2
-		pcall(dl.rect, x1 + inset, y1 + inset, x2 - inset, y2 - inset, col(st.edge), ROUND, st.edge_w)
+		dl.rect(x1 + inset, y1 + inset, x2 - inset, y2 - inset, col(st.edge), ROUND, st.edge_w)
 	end
 	self:item_tooltip(b)
 end
 
 -- Chips in reading order, wrapping only between chips.
 function V:chip_flow(build)
-	local ui = self.A.G.ui
 	local avail, used = self.A.G.avail_w(), 0
 	for i, b in ipairs(build) do
 		local label = self:chip_label(b)
-		local w, h = chip_size(ui, label)
+		local w, h = chip_size(label)
 		w = math.min(w, avail)
 		if i > 1 and used + CHIP_GAP + w <= avail then
 			ui.same_line()
@@ -280,7 +275,7 @@ end
 -- ------------------------------------------------------------------ panel contents
 function V:draw_compact()
 	local A = self.A
-	local ui, G, C, t, result = A.G.ui, A.G, A.G.C, A.t, A.MATCH.result
+	local G, C, t, result = A.G, A.G.C, A.t, A.MATCH.result
 	A.bold(C.ACCENT, self:header_text(false))
 	if not result then return self:waiting_block() end
 	self:chip_flow(result.build)
@@ -302,7 +297,7 @@ end
 
 function V:draw_counters(full)
 	local A = self.A
-	local ui, G, C, t = A.G.ui, A.G, A.G.C, A.t
+	local G, C, t = A.G, A.G.C, A.t
 	local c = A.MATCH.result.counters
 	ui.separator_text(t("counters"))
 	if full then G.wrapped(C.DIM, t("counters_hint")) end
@@ -341,9 +336,9 @@ end
 -- One build slot of the detailed view: chip, then its status line and explanation.
 function V:draw_slot(b, full)
 	local A = self.A
-	local ui, G, C, t = A.G.ui, A.G, A.G.C, A.t
+	local G, C, t = A.G, A.G.C, A.t
 	local label = self:chip_label(b)
-	local w, h = chip_size(ui, label)
+	local w, h = chip_size(label)
 	self:draw_chip(b, label, math.min(w, G.avail_w()), h)
 	local parts = { self:category(b.category), self:slot_status(b) }
 	if b.next then parts[2] = t("next_buy") .. ": " .. parts[2] end
@@ -370,7 +365,7 @@ end
 -- Detailed view; full=true in the menu (all explanations, descriptions, all threats, forecast).
 function V:draw_detailed(full)
 	local A = self.A
-	local ui, G, C, t = A.G.ui, A.G, A.G.C, A.t
+	local G, C, t = A.G, A.G.C, A.t
 	local result, ctx = A.MATCH.result, A.MATCH:context()
 	A.bold(C.ACCENT, self:header_text(true))
 	G.wrapped(C[BADGE[ctx]], t("badge_" .. self:badge_key(ctx)))
@@ -429,7 +424,7 @@ end
 -- Cached: the key holds everything the measured texts depend on.
 function V:natural_width(sw, mode)
 	local A = self.A
-	local ui, t, MATCH = A.G.ui, A.t, A.MATCH
+	local t, MATCH = A.t, A.MATCH
 	local key = table.concat({ MATCH.signature or "", A.ui_lang(), A.cfg.text_size, mode, MATCH:context(),
 		A.font_key(), A.TX.version, MATCH:err_text(t) or "" }, "|")
 	local hit = self.width_cache[key]
@@ -445,7 +440,7 @@ function V:natural_width(sw, mode)
 		fit(t("press_menu", A.cfg.keys.menu) .. "  ·  " .. (MATCH:err_text(t) or ""))
 	else
 		for i, b in ipairs(result.build) do
-			widths[i] = chip_size(ui, self:chip_label(b))
+			widths[i] = chip_size(self:chip_label(b))
 			widest_chip = math.max(widest_chip, widths[i])
 		end
 	end
@@ -477,15 +472,15 @@ end
 -- width are remembered per layout.
 function V:remember_drag(x, y, w, mode)
 	local A = self.A
-	local ui, cfg = A.G.ui, A.cfg
+	local cfg = A.cfg
 	A.G.wrapped(A.G.C.DIM, A.t("drag_hint", cfg.keys.lock))
 	local wx, wy = ui.window_pos()
 	if math.abs(wx - x) > 1 or math.abs(wy - y) > 1 then
 		cfg.pos_x, cfg.pos_y = math.floor(wx), math.floor(wy)
 		A.CFG:mark_dirty()
 	end
-	local okw, ww = pcall(ui.window_width)
-	if okw and type(ww) == "number" and math.abs(ww - w) > 2 and type(cfg.overlay_w) == "table" then
+	local ww = ui.window_width()
+	if math.abs(ww - w) > 2 and type(cfg.overlay_w) == "table" then
 		cfg.overlay_w[mode] = math.floor(ww)
 		A.CFG:mark_dirty()
 	end
@@ -493,7 +488,7 @@ end
 
 function V:draw_overlay(now)
 	local A = self.A
-	local ui, cfg = A.G.ui, A.cfg
+	local cfg = A.cfg
 	local WF, COND = ui.WindowFlags, ui.Cond
 	local sw, sh = ui.screen()
 	local mode = self:display_mode(now, sw)
@@ -508,7 +503,7 @@ function V:draw_overlay(now)
 	x = math.max(0, math.min(x, sw - w))
 	y = math.max(0, math.min(y, sh - math.max(60, self.last_h) - 8))
 	local draggable = A.state.menu_open and not cfg.locked
-	local bor = A.G.bor
+	local bor = bit.bor
 	local flags = bor(WF.NoTitleBar, WF.NoCollapse, WF.NoSavedSettings, WF.NoFocusOnAppearing, WF.NoNav,
 		WF.NoScrollbar, WF.NoScrollWithMouse or 0)
 	if not draggable then flags = bor(flags, WF.NoInputs, WF.NoMove, WF.NoResize) end
@@ -520,8 +515,7 @@ function V:draw_overlay(now)
 		A.with_font("body", function()
 			if mode == "compact" then self:draw_compact() else self:draw_detailed(false) end
 			if draggable then self:remember_drag(x, y, w, mode) end
-			local ok, h = pcall(ui.window_height)
-			if ok and type(h) == "number" then self.last_h = h end
+			self.last_h = ui.window_height()
 		end)
 	end)
 end
@@ -529,7 +523,6 @@ end
 -- Short tip at launch, centred near the top, fading out.
 function V:draw_tip(now)
 	local A = self.A
-	local ui = A.G.ui
 	self.tip_start = self.tip_start or now
 	local el = now - self.tip_start
 	if el > TIP_SECONDS then

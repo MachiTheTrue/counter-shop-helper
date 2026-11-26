@@ -28,7 +28,7 @@ TIERS = ("S+", "S", "A", "B", "C", "D")
 # the row used for names / descriptions, `alias_item_ids` the other rows carrying the same name
 # (live detection accepts all of them). No Cauterize / Illuminate / Kill to Heal in this shop.
 # Value = per level (level 1/2/3 = value x1/x2/x3); cost = per level. Names and descriptions are
-# not stored: the mod asks the game for them (name_msg_id / desc_msg_id from game_ids_8_1.json).
+# not stored: the mod reads them from the game data at run time (lib/sc_gamedata.lua).
 ITEMS = {
     # Defense
     "Resilience": {"category": "Defense", "game_item_id": 11683, "alias_item_ids": [29446],

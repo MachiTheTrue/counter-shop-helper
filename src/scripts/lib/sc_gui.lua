@@ -1,77 +1,10 @@
 -- Counter & Shop Helper: ImGui helpers shared by the panel and the menu.
 --
---   G.ui        the Tempest `ui` table, guarded: every scoped call (window, table, tab...) runs its
---               body in pcall, so an error inside never skips the matching End, and the push/pop
---               stacks (colours, style vars, fonts, ids, indent) are put back to their level.
 --   G.C         the palette
---   G.with_theme, G.tcol, G.wrapped, G.bor
+--   G.with_theme, G.tcol, G.wrapped, G.avail_w
+-- Widgets are Tempest's `ui` functions (types/imgui.d.lua), called directly.
 
 local G = {}
-local RAW = ui
-
--- ------------------------------------------------------------------ guarded ImGui
-local depth = { color = 0, var = 0, font = 0, id = 0, indent = 0 }
-
-local function snapshot()
-	return { depth.color, depth.var, depth.font, depth.id, depth.indent }
-end
-
-local function restore(s)
-	if depth.color > s[1] then pcall(RAW.pop_color, depth.color - s[1]) end
-	if depth.var > s[2] then pcall(RAW.pop_var, depth.var - s[2]) end
-	for _ = s[3] + 1, depth.font do pcall(RAW.pop_font) end
-	for _ = s[4] + 1, depth.id do pcall(RAW.pop_id) end
-	if depth.indent > s[5] then pcall(RAW.unindent, depth.indent - s[5]) end
-	depth.color, depth.var, depth.font, depth.id, depth.indent = s[1], s[2], s[3], s[4], s[5]
-end
-
--- Wraps a scoped widget (ui.window(title, opts, fn) ...): its function arguments run protected;
--- the first error is raised again once the widget has been closed.
-local function scoped(name)
-	return function(...)
-		local args, n, err = { ... }, select("#", ...), nil
-		for k = 1, n do
-			local fn = args[k]
-			if type(fn) == "function" then
-				args[k] = function(...)
-					local s = snapshot()
-					local ok, e = pcall(fn, ...)
-					if not ok then
-						restore(s)
-						err = err or e
-					end
-				end
-			end
-		end
-		local r = { RAW[name](unpack(args, 1, n)) }
-		if err then error(err, 0) end
-		return unpack(r)
-	end
-end
-
-local U = setmetatable({}, { __index = RAW })
-for _, name in ipairs({ "window", "child", "group", "tooltip", "tab_bar", "tab_item", "table", "popup",
-	"popup_modal", "popup_context_item", "tree", "menu", "menu_bar", "with_font" }) do
-	if RAW[name] then U[name] = scoped(name) end
-end
-function U.push_color(...) RAW.push_color(...) depth.color = depth.color + 1 end
-function U.pop_color(n) n = n or 1 RAW.pop_color(n) depth.color = math.max(0, depth.color - n) end
-function U.push_var(...) RAW.push_var(...) depth.var = depth.var + 1 end
-function U.pop_var(n) n = n or 1 RAW.pop_var(n) depth.var = math.max(0, depth.var - n) end
-function U.push_font(f) RAW.push_font(f) depth.font = depth.font + 1 end
-function U.pop_font() RAW.pop_font() depth.font = math.max(0, depth.font - 1) end
-function U.push_id(x) RAW.push_id(x) depth.id = depth.id + 1 end
-function U.pop_id() RAW.pop_id() depth.id = math.max(0, depth.id - 1) end
-function U.indent(w) RAW.indent(w) depth.indent = depth.indent + (w or 0) end
-function U.unindent(w) RAW.unindent(w) depth.indent = depth.indent - (w or 0) end
-G.ui = U
-
--- Flags are plain integers; LuaJIT has `bit`, the fallback adds distinct single-bit flags.
-G.bor = (bit and bit.bor) or function(...)
-	local s = 0
-	for _, v in ipairs({ ... }) do s = s + v end
-	return s
-end
 
 -- ------------------------------------------------------------------ palette and theme
 G.C = {
@@ -104,42 +37,44 @@ local VARS = {
 	WindowBorderSize = { 1 },
 }
 
--- Runs fn with the mod's colours and style pushed (and always popped).
+-- Runs fn with the mod's colours and style pushed. They are popped even when fn raises, so one error
+-- in the panel never leaves the game's own UI in the mod's theme; the error is then raised again.
 function G.with_theme(fn)
 	local nc, nv = 0, 0
 	for name, c in pairs(COLORS) do
-		local idx = U.Col[name]
+		local idx = ui.Col[name]   -- nil for a name this ImGui version does not have (TabActive / TabSelected)
 		if idx then
-			U.push_color(idx, c[1], c[2], c[3], c[4])
+			ui.push_color(idx, c[1], c[2], c[3], c[4])
 			nc = nc + 1
 		end
 	end
 	for name, v in pairs(VARS) do
-		local idx = U.StyleVar[name]
-		if idx and pcall(U.push_var, idx, v[1], v[2]) then nv = nv + 1 end
+		local idx = ui.StyleVar[name]
+		if idx then
+			ui.push_var(idx, v[1], v[2])
+			nv = nv + 1
+		end
 	end
 	local ok, err = pcall(fn)
-	if nv > 0 then U.pop_var(nv) end
-	if nc > 0 then U.pop_color(nc) end
+	ui.pop_var(nv)
+	ui.pop_color(nc)
 	if not ok then error(err, 0) end
 end
 
 -- Coloured text (one line), and wrapped text (c = nil: default colour).
 function G.tcol(c, s)
-	U.text_colored(c[1], c[2], c[3], c[4], "%s", s)
+	ui.text_colored(c[1], c[2], c[3], c[4], "%s", s)
 end
 
 function G.wrapped(c, s)
-	if c then U.push_color(U.Col.Text, c[1], c[2], c[3], c[4]) end
-	U.text_wrapped("%s", s)
-	if c then U.pop_color(1) end
+	if c then ui.push_color(ui.Col.Text, c[1], c[2], c[3], c[4]) end
+	ui.text_wrapped("%s", s)
+	if c then ui.pop_color(1) end
 end
 
--- Width left on the current line, with a fallback when ImGui cannot tell.
+-- Width left on the current line.
 function G.avail_w()
-	local ok, w = pcall(U.content_region_avail)
-	if ok and type(w) == "number" and w > 0 then return w end
-	return (U.window_width() or 300) - 24
+	return (ui.content_region_avail())
 end
 
 return G

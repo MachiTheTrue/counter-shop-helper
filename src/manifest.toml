@@ -1,11 +1,11 @@
 [mod]
 id = "paladins-smartcounter-81"
 name = "Counter & Shop Helper"
-version = "0.6.4"
+version = "0.7.0"
 icon = "icon.png"
 readme = "README.md"
 dependencies = [
-    "tempest-scripting>=1.0.0",
+    "tempest-scripting>=1.1.0",
 ]
 
 [[mod.authors]]

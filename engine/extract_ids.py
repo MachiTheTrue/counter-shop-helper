@@ -1,8 +1,8 @@
 """Game IDs for 8.1: the message ids of every name the mod shows, and the ability effects.
 
-The mod ships no game text. At run time it asks the game to translate these message ids
-(lib/sc_text.lua, UIMoviePlayer.usc_TranslateMsgId), so names always match the game's own language.
-This script only finds the ids, and checks them against the English table.
+The mod ships none of this: at run time it reads the same fields itself with Tempest's Game Data
+API (lib/sc_gamedata.lua: assembly, lib/sc_text.lua: lang). This script checks the mapping offline
+against the English table, and its ids feed the test fixture (export_lua.py -> engine/tests/game_ids.lua).
 
 Sources (export them once with upk, see DEVELOPPEMENT.md):
     <game>\\ChaosGame\\CookedPCConsole\\assembly.dat           -> Work\\Extracted\\8.1.5839.0\\assembly.json

@@ -71,10 +71,15 @@ function MT:update()
 	table.sort(names)
 	inputs.owned, inputs.owned_src = owned, src
 	self.inputs = inputs
+	-- the enemies' max health read in the match (sc_detect), used by the predictor's squishy rule
+	local live_hp, hp = self.DET.state.enemy_hp or {}, {}
+	for name, v in pairs(live_hp) do hp[#hp + 1] = name .. "=" .. v end
+	table.sort(hp)
 	local sig = table.concat({ inputs.me or "", table.concat(inputs.enemies, ","), inputs.phase, inputs.mode or "",
-		inputs.style, table.concat(names, ",") }, "|")
+		inputs.style, table.concat(names, ","), table.concat(hp, ",") }, "|")
 	if sig == self.signature then return end
 	self.signature, self.changed_at = sig, os.clock()
+	self.PRED.live_hp = live_hp
 	self.result, self.err = nil, nil
 	if not inputs.me then
 		self.err = { "need_champ" }

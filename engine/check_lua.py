@@ -182,6 +182,22 @@ data_src = open(os.path.join(SRC, "lib", "sc_data.lua"), encoding="utf-8").read(
 bad = sorted({ch for ch in data_src if ord(ch) > 0x7F})
 if bad:
     err(f"sc_data.lua : caractères non ASCII (texte du jeu copié ?) {bad[:10]}")
+# 0.7.0: no game stats in the package either: health is read live (r_nHealthMaximum), champions are
+# found by GetBotId (no pawn class list), and costs / shield health / device ids are not shipped.
+# Nothing the game data has (Tempest Game Data API, lib/sc_gamedata.lua): no message id, role or rank
+# count; only the bot id and item id that link the mod's rules to the game.
+for m in re.finditer(r"\b(hp|pawn|device_id|cost|ranks|max_rank|args|base_health\w*|cost_per_level|role"
+                     r"|name_msg|desc_msg|role_msg|category_msg)\s*=", data_src):
+    err(f"sc_data.lua:{data_src.count(chr(10), 0, m.start()) + 1}: donnée du jeu livrée ({m.group(1)})")
+# the Game Data API needs Tempest Scripting 1.1.0: the manifest says so
+manifest = open(os.path.join(SRC, "..", "manifest.toml"), encoding="utf-8").read()
+if '"tempest-scripting>=1.1.0"' not in manifest:
+    err("manifest.toml : dépendance tempest-scripting>=1.1.0 absente (API assembly / lang)")
+# no item stat typed in the mod's sentences (the game's own item description is shown instead)
+for lang, keys in tables.items():
+    for k in keys:
+        if re.match(r"note_(?!Wrecker$)", k):
+            err(f"[{lang}] {k} : statistique d'objet écrite en dur (la description du jeu la donne)")
 # no champion or item name typed in the mod's sentences: they are %s filled with the game's names
 # (sc_text.lua), otherwise a French panel would show "Wrecker" next to the shop's "Broyeur"
 game_names = [c["name"] for c in data["champions"]] + list(data["items"])
@@ -201,6 +217,18 @@ FORBIDDEN = {
     r"\bdump_sdk\b": "dump du SDK", r"\bmemory\.": "lecture mémoire brute", r"\bui\.C\b": "FFI ImGui brut",
     r"\bgame_dir\b": "lecture de fichiers du jeu", r"appmanifest|ChaosEngine\.ini": "lecture de la config Steam / du jeu",
     r"smartcounter_(probe|selftest|items|dumpsdk)": "commande de débogage", r"icons[/\\]": "icône du jeu",
+    # 0.7.0 (QC review): Tempest's ui API called directly, no proxy, no pcall around widgets or draws,
+    # no raw field dump in the release (the Match tab's report is built from the modules' state; the
+    # dev probe SmartCounter-LiveCheck stays out of the package), game properties read through
+    # lib/sc_game.lua (Object:has) instead of home-made pcall readers
+    r"\bG\.ui\b|\bRAW\[": "proxy de la table ui", r"pcall\(\s*(ui|dl)\.(?!add_font\b)": "pcall autour d'un appel ui",   # add_font: a Windows font may be missing
+    r"\bdescribe\b": "dump brut des champs", r"livecheck": "sonde de dev",
+    r"local function (try|get)\b": "lecture protégée maison (lib/sc_game.lua à la place)",
+    # game text from the Game Data API (lang.message), not from the HUD's translator (the client's
+    # language still comes from the engine, Object.GetLanguage: lang.language() misses Steam's language)
+    r"usc_TranslateMsgId": "traducteur du HUD (lang.message à la place)",
+    # every ui function the mod calls is declared in tempest.d.lua: no "does it exist?" guard
+    r"\b(?:if|and|or|not)\s+ui\.[a-z_]+\s*(?:then|and|or|\))": "test d'existence d'une fonction ui",
 }
 for f in UI_FILES:
     text = open(os.path.join(SRC, f), encoding="utf-8").read()
@@ -228,7 +256,7 @@ for lang in ("fr", "de", "it"):
         if m:
             err(f"[{lang}] {k} : mot anglais « {m.group(0)} »")
 # RU / ZH / JA / KO: no English word left in a translated text (names, keys and commands excepted)
-ASCII_OK = re.compile(r"^(SmartCounter|Tempest|Ctrl|Shift|Alt|Esc|Auto|Discord|Steam|Lua|Python|Machi|Konno|"
+ASCII_OK = re.compile(r"^(SmartCounter|Tempest|Scripting|Ctrl|Shift|Alt|Esc|Auto|Discord|Steam|Lua|Python|Machi|Konno|"
                       r"smartcounter\w*|F\d+|Lv|HP|CC|SDK|II|III|Inara|Azaan|Atlas|opt)$", re.I)
 for lang in ("ru", "zh", "ja", "ko"):
     for k, v in tables.get(lang, {}).items():

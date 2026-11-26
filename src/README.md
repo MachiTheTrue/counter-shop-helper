@@ -1,6 +1,6 @@
 # Counter & Shop Helper
 
-**Paladins 8.1 (8.1.5839.0) · Lua mod · requires Tempest Scripting 1.0.0 or later**
+**Paladins 8.1 (8.1.5839.0) · Lua mod · requires Tempest Scripting 1.1.0 or later**
 
 An in-game helper that reads the enemy team and tells you what to buy and who to watch.
 
@@ -16,10 +16,9 @@ An in-game helper that reads the enemy team and tells you what to buy and who to
 - **Enemy threats:** the enemy champions' own abilities, e.g. "Makoa: Dredge Anchor (stuns)".
 - **Champion select:** counter-picks and the best roles against the enemy team.
 - **8 languages:** English, Français, Deutsch, Italiano, Русский, 简体中文, 日本語, 한국어,
-  or Auto (follows the game's language). Champion, item, ability, role and category names are
-  asked from the game while it runs. If the mod shows another language than the game, English
-  names and the mod's own words keep the panel in one language (a setting keeps the game's names).
-  English names are shown until the game has loaded its interface.
+  or Auto (follows the game's language). Champion, item, ability, role and category names and
+  item descriptions are read from the game's own text files (Tempest's Game Data API), in the
+  language the mod shows; a setting keeps the names in the game's language instead.
 
 ## Keys (all changeable in the menu, all on a 60% keyboard)
 - `Ctrl+J`: menu (match, settings, help)

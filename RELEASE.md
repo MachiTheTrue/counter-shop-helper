@@ -9,9 +9,9 @@ How to ship a new version to **GitHub Releases** and the **Tempest mod repositor
 |---|---|
 | Mod ID | `paladins-smartcounter-81`: **never change it**, so updates replace the installed version |
 | Name | Counter & Shop Helper |
-| Current version | 0.6.4 |
+| Current version | 0.7.0 |
 | Author | Machi Konno (link: `Discord: machi.konno`) |
-| Kind | scripts (Lua), depends on `tempest-scripting>=1.0.0` |
+| Kind | scripts (Lua), depends on `tempest-scripting>=1.1.0` (Game Data API) |
 | Compatibility | patch `8.1` (build 8.1.5839.0, "Wekono's Wake Hotfix 1", from `tempest-cli build identify`) |
 | Icon | `src/icon.png`, 512 × 512 (original artwork; the package ships no game art or game text) |
 | Signing key | `machi-konno-v2`, fingerprint `80AD2C078946FE3019DB48BCE76DD8DAD1490829` |

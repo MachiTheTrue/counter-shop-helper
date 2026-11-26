@@ -12,9 +12,9 @@
 -- the font atlas.
 --
 -- CJK glyphs: only the characters really shown are added, to keep the atlas small: the UI strings of
--- the language (sc_lang.lua) plus the game's own names in its language (sc_text.lua). When more game
--- names arrive after the set was built (the game translates late), it is rebuilt, at most
--- MAX_REBUILDS times.
+-- the language (sc_lang.lua) plus the game's own names on screen (sc_text.lua). When more game names
+-- come on screen after the set was built (names switched to the game's language), it is rebuilt, at
+-- most MAX_REBUILDS times.
 
 local F = {}
 F.__index = F
@@ -152,7 +152,7 @@ end
 -- Loads a whole set (body + bold, 3 sizes). Runs from tempest.queue, outside any frame.
 function F:load(set, how)
 	if set.state ~= "pending" and set.state ~= "queued" then return end
-	if ui.ready and not ui.ready() then return end
+	if not ui.ready() then return end
 	set.state = "loading"
 	local regular = pick("segoeui.ttf", "arial.ttf")
 	local bold = pick("segoeuib.ttf", "arialbd.ttf") or regular
@@ -198,18 +198,14 @@ end
 
 local function queue_load(self, set, now)
 	set.tries = (set.tries or 0) + 1
-	local ok = pcall(tempest.queue, function() self:load(set, "queue") end)
-	if ok then
-		set.state, set.queued_at = "queued", now
-	else
-		set.state = "failed"
-		self.log("fonts %s: tempest.queue refused the load, default font kept", set.group)
-	end
+	tempest.queue(function() self:load(set, "queue") end)
+	set.state, set.queued_at = "queued", now
 end
 
--- More game names than when this CJK set was built (the game translated late): build it again.
+-- More game names on screen than when this CJK set was built (names switched to the game's
+-- language): build it again.
 function F:wants_rebuild(set, now)
-	return set.group ~= "latin" and (set.rebuilds or 0) < MAX_REBUILDS and self.TX.has_movie
+	return set.group ~= "latin" and (set.rebuilds or 0) < MAX_REBUILDS
 		and (self.TX.n_texts or 0) > (set.n_game_texts or 0) and now - (set.ready_at or now) >= REBUILD_DELAY
 end
 
@@ -218,7 +214,7 @@ function F:tick(now, ui_lang)
 	local set = self:set_for(ui_lang)
 	if set.state == "wait" then
 		set.state, set.ready_at, set.previous = "ready", now, nil
-	elseif set.state == "pending" and (not ui.ready or ui.ready()) then
+	elseif set.state == "pending" and ui.ready() then
 		queue_load(self, set, now)
 	elseif set.state == "queued" and now - (set.queued_at or now) > QUEUE_TIMEOUT then
 		if set.tries >= MAX_TRIES then
